@@ -136,10 +136,11 @@ interface IColumnFilter {
     value2?: string;
 }
 
-/** One row of the (post-filter, post-sort) flattened render list: either a group header or a leaf data row. */
+/** One row of the (post-filter, post-sort) flattened render list: a group header, a leaf data row, or an expanded record-detail sub-grid. */
 type RenderNode =
     | { kind: "group"; depth: number; path: string; column: ITableColumn; value: powerbi.PrimitiveValue; count: number; sums: Map<string, number> }
-    | { kind: "row"; depth: number; row: ITableRow };
+    | { kind: "row"; depth: number; row: ITableRow }
+    | { kind: "detail"; depth: number; row: ITableRow };
 
 const ROW_BUFFER = 6; // extra rows rendered above/below viewport to avoid flicker while scrolling
 const GROUP_SEP = "\u241F"; // unit separator — safe delimiter for building unique group path keys
@@ -194,6 +195,13 @@ export class TableRenderer {
     private _sparklineColumns: Set<string> = new Set();
     // Item 2: drag-to-pivot — the single row column currently promoted to a group-by, if any
     private _dragGroupColumn: ITableColumn | null = null;
+    // Item 5: true drill-down — leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
+    private _expandedDetailRows: Set<string> = new Set();
+    // Per-node pixel offsets into the virtualized body, aligned with _renderNodes; recomputed whenever
+    // the node list changes, since detail nodes have a variable height unlike the uniform-height rows/groups.
+    private _nodeOffsets: number[] = [];
+    private _totalContentHeight = 0;
+    private readonly detailFieldRowHeight = 22;
 
     private _pendingDragGroupName?: string;
     private _hydratedFromPersist = false;
@@ -1709,9 +1717,97 @@ export class TableRenderer {
         }
 
         this._filteredData = rows;
-        this._renderNodes = this.effectiveGroupColumns().length > 0
+        const baseNodes = this.effectiveGroupColumns().length > 0
             ? this.buildGroupedNodes(rows)
             : rows.map((r) => ({ kind: "row", depth: 0, row: r } as RenderNode));
+
+        this._renderNodes = this.insertDetailNodes(baseNodes);
+        this.computeNodeOffsets();
+    }
+
+    // -----------------------------------------------------------------
+    // True drill-down: per-record detail sub-grid (Item 5)
+    //
+    // Distinct from group expand/collapse above: clicking the disclosure
+    // control on a *leaf* row expands an inline sub-grid listing every
+    // field of that underlying record -- including columns hidden via the
+    // column-visibility toggle and Tooltip-role fields -- not just the
+    // columns currently visible in the main grid.
+    // -----------------------------------------------------------------
+
+    /** Walks a flat node list and splices in a "detail" node immediately after each row node that's expanded. */
+    private insertDetailNodes(nodes: RenderNode[]): RenderNode[] {
+        if (this._expandedDetailRows.size === 0) {
+            return nodes;
+        }
+        const out: RenderNode[] = [];
+        nodes.forEach((n) => {
+            out.push(n);
+            if (n.kind === "row" && this._expandedDetailRows.has(n.row.key)) {
+                out.push({ kind: "detail", depth: n.depth, row: n.row });
+            }
+        });
+        return out;
+    }
+
+    /** Every field available for a record's detail view: all manageable columns plus Tooltip-role fields, deduped. */
+    private allDetailColumns(): ITableColumn[] {
+        const seen = new Set<string>();
+        const list: ITableColumn[] = [];
+        [...this.columns, ...this.tooltipColumns].forEach((c) => {
+            if (!seen.has(c.name)) {
+                seen.add(c.name);
+                list.push(c);
+            }
+        });
+        return list;
+    }
+
+    private detailRowHeight(): number {
+        return this.allDetailColumns().length * this.detailFieldRowHeight + 16;
+    }
+
+    private toggleDetail(rowKey: string): void {
+        if (this._expandedDetailRows.has(rowKey)) {
+            this._expandedDetailRows.delete(rowKey);
+        } else {
+            this._expandedDetailRows.add(rowKey);
+        }
+        this.applyPipeline();
+        this.renderVisibleRows();
+    }
+
+    /**
+     * Cumulative pixel offset of every node in `_renderNodes`, since detail nodes break the
+     * "every node is `defaultRowHeight` tall" assumption the virtual scroller otherwise relies on.
+     */
+    private computeNodeOffsets(): void {
+        const offsets: number[] = [];
+        let acc = 0;
+        this._renderNodes.forEach((n) => {
+            offsets.push(acc);
+            acc += n.kind === "detail" ? this.detailRowHeight() : this.defaultRowHeight;
+        });
+        this._nodeOffsets = offsets;
+        this._totalContentHeight = acc;
+    }
+
+    /** Binary search: index of the last node whose offset is <= target. */
+    private findNodeIndexAtOffset(target: number): number {
+        const offsets = this._nodeOffsets;
+        let lo = 0;
+        let hi = offsets.length - 1;
+        let ans = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (offsets[mid] <= target) {
+                ans = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return ans;
     }
 
     // -----------------------------------------------------------------
@@ -1940,16 +2036,18 @@ export class TableRenderer {
         const viewportHeight = this.scrollRoot.clientHeight || 400;
         const scrollTop = this.scrollRoot.scrollTop;
 
-        const visibleRowCount = Math.ceil(viewportHeight / rowHeight) + ROW_BUFFER;
-        const startIndex = this.settings.virtualScrollEnabled
-            ? Math.max(0, Math.floor(scrollTop / rowHeight) - Math.floor(ROW_BUFFER / 2))
-            : 0;
-        const endIndex = this.settings.virtualScrollEnabled
-            ? Math.min(totalRows, startIndex + visibleRowCount)
-            : totalRows;
+        // Node heights aren't uniform once a detail sub-grid (Item 5) is expanded, so start/end
+        // indices come from the precomputed offset table (computeNodeOffsets) rather than a
+        // simple scrollTop / rowHeight division.
+        let startIndex = 0;
+        let endIndex = totalRows;
+        if (this.settings.virtualScrollEnabled) {
+            startIndex = Math.max(0, this.findNodeIndexAtOffset(scrollTop) - Math.floor(ROW_BUFFER / 2));
+            endIndex = Math.min(totalRows, this.findNodeIndexAtOffset(scrollTop + viewportHeight) + Math.ceil(ROW_BUFFER / 2) + 1);
+        }
 
-        const topSpacerHeight = startIndex * rowHeight;
-        const bottomSpacerHeight = (totalRows - endIndex) * rowHeight;
+        const topSpacerHeight = this._nodeOffsets[startIndex] ?? 0;
+        const bottomSpacerHeight = this._totalContentHeight - (endIndex < totalRows ? this._nodeOffsets[endIndex] : this._totalContentHeight);
 
         this.clearElement(this.bodyRoot);
         this.bodyRoot.style.position = "relative";
@@ -1966,8 +2064,11 @@ export class TableRenderer {
             const node = nodes[i];
             if (node.kind === "group") {
                 this.bodyRoot.appendChild(this.renderGroupRow(node, visibleColumns, rowHeight));
+            } else if (node.kind === "detail") {
+                this.bodyRoot.appendChild(this.renderDetailRow(node.row, node.depth));
             } else {
-                this.bodyRoot.appendChild(this.renderRow(node.row, node.depth, i, visibleColumns, selectedIds, rowHeight));
+                const isDetailExpanded = this._expandedDetailRows.has(node.row.key);
+                this.bodyRoot.appendChild(this.renderRow(node.row, node.depth, i, visibleColumns, selectedIds, rowHeight, isDetailExpanded));
             }
         }
 
@@ -2041,7 +2142,8 @@ export class TableRenderer {
         index: number,
         visibleColumns: ITableColumn[],
         selectedIds: ISelectionId[],
-        rowHeight: number
+        rowHeight: number,
+        isDetailExpanded: boolean = false
     ): HTMLDivElement {
         const rowEl = document.createElement("div");
         rowEl.className = "skiba-table__row";
@@ -2093,13 +2195,89 @@ export class TableRenderer {
 
         visibleColumns.forEach((col, idx) => {
             const cell = this.renderCell(row, col);
-            if (idx === 0 && depth > 0) {
-                cell.style.paddingLeft = `${depth * 16 + 8}px`;
+            if (idx === 0) {
+                if (depth > 0) {
+                    cell.style.paddingLeft = `${depth * 16 + 8}px`;
+                }
+                cell.insertBefore(this.renderDetailToggle(row, isDetailExpanded), cell.firstChild);
             }
             rowEl.appendChild(cell);
         });
 
         return rowEl;
+    }
+
+    /**
+     * Disclosure control for a leaf row's full-record detail sub-grid (Item 5). Nested inside
+     * the row's own focusable/clickable region, so it needs its own tabIndex/role and must stop
+     * propagation on click and Enter/Space -- otherwise toggling detail would also fire the row's
+     * cross-filter selection handler.
+     */
+    private renderDetailToggle(row: ITableRow, isExpanded: boolean): HTMLSpanElement {
+        const toggle = document.createElement("span");
+        toggle.className = "skiba-table__row-toggle";
+        toggle.textContent = isExpanded ? "\u25BC" : "\u25B6";
+        toggle.tabIndex = 0;
+        toggle.setAttribute("role", "button");
+        toggle.setAttribute("aria-expanded", String(isExpanded));
+        toggle.setAttribute(
+            "aria-label",
+            isExpanded
+                ? this.loc("Detail_Collapse", "Collapse record details")
+                : this.loc("Detail_Expand", "Expand record details")
+        );
+
+        toggle.addEventListener("click", (evt: MouseEvent) => {
+            evt.stopPropagation();
+            this.toggleDetail(row.key);
+        });
+        toggle.addEventListener("keydown", (evt: KeyboardEvent) => {
+            if (evt.key === "Enter" || evt.key === " ") {
+                evt.preventDefault();
+                evt.stopPropagation();
+                this.toggleDetail(row.key);
+            }
+        });
+
+        return toggle;
+    }
+
+    /**
+     * The record-detail sub-grid itself: every field of the underlying row (including columns
+     * hidden from the main grid and Tooltip-role fields) as a two-column Field/Value list.
+     */
+    private renderDetailRow(row: ITableRow, depth: number): HTMLDivElement {
+        const wrap = document.createElement("div");
+        wrap.className = "skiba-table__row skiba-table__row--detail";
+        wrap.style.height = `${this.detailRowHeight()}px`;
+        wrap.style.paddingLeft = `${depth * 16 + 24}px`;
+        wrap.setAttribute("role", "row");
+
+        const grid = document.createElement("div");
+        grid.className = "skiba-detail-grid";
+
+        this.allDetailColumns().forEach((col) => {
+            const field = document.createElement("div");
+            field.className = "skiba-detail-grid__field";
+
+            const label = document.createElement("span");
+            label.className = "skiba-detail-grid__label";
+            label.textContent = col.displayName;
+
+            const raw = row.values[col.name];
+            const value = document.createElement("span");
+            value.className = "skiba-detail-grid__value";
+            value.textContent = raw === null || raw === undefined
+                ? ""
+                : (typeof raw === "number" ? this.formatNumber(raw) : String(raw));
+
+            field.appendChild(label);
+            field.appendChild(value);
+            grid.appendChild(field);
+        });
+
+        wrap.appendChild(grid);
+        return wrap;
     }
 
     private renderCell(row: ITableRow, col: ITableColumn): HTMLDivElement {

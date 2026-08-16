@@ -325,6 +325,80 @@
     white-space: nowrap;
 }
 
+// Item 5: true drill-down -- per-record detail sub-grid, expanded from a leaf row's toggle.
+.skiba-table__row-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    font-size: 9px;
+    line-height: 1;
+    color: #767676;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+        color: #0078d4;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+        outline-offset: 1px;
+    }
+}
+
+.skiba-table__row--detail {
+    cursor: default;
+    align-items: stretch;
+    background: var(--skiba-alt-row, #fafafa);
+    box-sizing: border-box;
+
+    &:hover {
+        background: var(--skiba-alt-row, #fafafa);
+    }
+}
+
+.skiba-detail-grid {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 4px 10px;
+    box-sizing: border-box;
+}
+
+.skiba-detail-grid__field {
+    display: flex;
+    align-items: center;
+    height: 22px;
+    font-size: 11px;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
+.skiba-detail-grid__label {
+    flex: 0 0 40%;
+    max-width: 260px;
+    font-weight: 600;
+    color: var(--skiba-header-font, #555555);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 8px;
+}
+
+.skiba-detail-grid__value {
+    flex: 1 1 60%;
+    color: var(--skiba-cell-font, #222222);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .skiba-table__empty-filter {
     padding: 24px;
     text-align: center;
