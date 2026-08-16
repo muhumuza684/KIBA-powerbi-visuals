@@ -120,6 +120,45 @@
     }
 }
 
+// Inline confirmation shown in place of "Save current view as default" when
+// overwriting an existing saved default view (Item 7) — deliberately not a
+// browser confirm() dialog, since it affects everyone who opens the report.
+.skiba-toolbar__confirm {
+    padding: 6px 12px;
+}
+
+.skiba-toolbar__confirm-msg {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.skiba-toolbar__confirm-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+
+    button {
+        font-size: 12px;
+        padding: 4px 10px;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+
+        &:last-child {
+            background: #0078d4;
+            color: #fff;
+            border-color: #0078d4;
+        }
+
+        &:hover {
+            opacity: 0.85;
+        }
+    }
+}
+
 // -----------------------------------------------------------------
 // Search
 // -----------------------------------------------------------------
@@ -219,6 +258,13 @@
         box-shadow: inset 3px 0 0 #0078d4;
     }
 
+    // Full keyboard navigation (item 14) — rows and group rows are tabbable
+    // (tabIndex=0) so Enter/Space can select or expand/collapse without a mouse.
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+        outline-offset: -2px;
+    }
+
     &--header {
         cursor: default;
         font-weight: var(--skiba-header-weight, 600);
@@ -301,6 +347,36 @@
     }
 }
 
+// Conditional URL-action link icon (Item 9) — reuses the same minimal
+// Unicode-glyph icon-button look as the resizer/hamburger/filter icons.
+.skiba-link-icon {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    margin-left: 6px;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1;
+    color: #0078d4;
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(0, 120, 212, 0.1);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+        outline-offset: 1px;
+    }
+}
+
 // In-cell data bars
 .skiba-table__data-bar {
     position: absolute;
@@ -349,6 +425,79 @@
     color: #bbb;
 }
 
+// Landing page (item 15) — reuses the empty-state branding, adds a short
+// plain-language description paragraph explaining what the visual does.
+.skiba-landing-page__description {
+    font-size: 12px;
+    color: #888;
+    max-width: 360px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+// -----------------------------------------------------------------
+// High-contrast accessibility mode (item 13)
+//
+// Power BI's high-contrast setting is detected in TableRenderer and applied
+// via --skiba-header-bg / --skiba-cell-bg / etc (already used everywhere
+// below), plus these three extra variables for borders, selection, and
+// links, which the default rgba-based borders/highlights are too subtle to
+// rely on in high contrast.
+// -----------------------------------------------------------------
+
+.skiba-table-root.skiba-high-contrast {
+    .skiba-table__header {
+        border-bottom: 2px solid var(--skiba-hc-border, currentColor);
+    }
+
+    .skiba-table__cell {
+        border-right: 1px solid var(--skiba-hc-border, currentColor);
+    }
+
+    .skiba-table__row {
+        border-bottom: 1px solid var(--skiba-hc-border, currentColor);
+
+        &:hover {
+            outline: 1px solid var(--skiba-hc-border, currentColor);
+            background: none;
+        }
+
+        &--selected {
+            background: none;
+            box-shadow: none;
+            outline: 2px solid var(--skiba-hc-selected, currentColor);
+            outline-offset: -2px;
+        }
+
+        &--totals {
+            border-top: 2px solid var(--skiba-hc-border, currentColor);
+        }
+    }
+
+    .skiba-table__cell--header:focus-visible,
+    .skiba-table__row:focus-visible {
+        outline: 2px solid var(--skiba-hc-selected, currentColor);
+        outline-offset: -2px;
+    }
+
+    .skiba-table__data-bar {
+        background: var(--skiba-bar-color);
+        opacity: 1;
+        border: 1px solid var(--skiba-hc-border, currentColor);
+    }
+
+    .skiba-hamburger,
+    .skiba-toolbar__menu,
+    .skiba-filter-popover {
+        border: 1px solid var(--skiba-hc-border, currentColor);
+    }
+
+    .skiba-resizer:hover,
+    .skiba-resizer--active {
+        background: var(--skiba-hc-selected, currentColor);
+    }
+}
+
 // -----------------------------------------------------------------
 // Watermark
 // -----------------------------------------------------------------
@@ -363,19 +512,166 @@
 }
 
 // -----------------------------------------------------------------
-// Print / PDF export mode
+// Item 2: drag-to-pivot — drop target + "Grouped by" chip
 // -----------------------------------------------------------------
 
-@media print {
-    .skiba-print-mode {
-        .skiba-toolbar,
-        .skiba-search {
-            display: none !important;
-        }
+.skiba-pivot-drop {
+    position: absolute;
+    top: 8px;
+    right: 44px;
+    z-index: 19;
+    align-items: center;
+    justify-content: center;
+    min-width: 160px;
+    height: 30px;
+    padding: 0 10px;
+    background: rgba(0, 120, 212, 0.1);
+    border: 1.5px dashed #0078d4;
+    border-radius: 4px;
+    color: #0078d4;
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: auto;
+}
 
-        .skiba-table__scroll {
-            overflow: visible !important;
-            height: auto !important;
-        }
+.skiba-pivot-chip-root {
+    padding: 0 8px;
+    display: none;
+}
+
+.skiba-pivot-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(0, 120, 212, 0.12);
+    border: 1px solid rgba(0, 120, 212, 0.3);
+    border-radius: 12px;
+    font-size: 11px;
+    color: #0078d4;
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(0, 120, 212, 0.2);
     }
+
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+        outline-offset: 1px;
+    }
+}
+
+// -----------------------------------------------------------------
+// Items 1 & 4: Calculations / Combined columns toolbar sections
+// -----------------------------------------------------------------
+
+.skiba-toolbar__column-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.skiba-toolbar__checkbox--sparkline {
+    font-size: 11px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+.skiba-calc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+}
+
+.skiba-calc-item__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skiba-calc-item__delete {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+
+    &:hover {
+        color: #d32f2f;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+    }
+}
+
+.skiba-calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 0 2px;
+}
+
+.skiba-calc-form__input,
+.skiba-calc-form__formula {
+    width: 100%;
+    padding: 5px 7px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    resize: vertical;
+
+    &:focus-visible {
+        outline: 2px solid #0078d4;
+        outline-offset: 1px;
+    }
+}
+
+.skiba-calc-form__error {
+    font-size: 11px;
+    color: #d32f2f;
+    min-height: 14px;
+}
+
+.skiba-toolbar__button--primary {
+    background: #0078d4;
+    color: #fff;
+    border-radius: 4px;
+    font-weight: 600;
+
+    &:hover {
+        background: #106ebe;
+    }
+}
+
+// -----------------------------------------------------------------
+// Item 3: sparklines
+// -----------------------------------------------------------------
+
+.skiba-table__cell--with-sparkline {
+    gap: 6px;
+}
+
+.skiba-sparkline {
+    flex-shrink: 0;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.skiba-sparkline__line {
+    fill: none;
+    stroke: var(--skiba-bar-color, #0078d4);
+    stroke-width: 1.25;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.skiba-sparkline__dot {
+    fill: var(--skiba-bar-color, #0078d4);
 }

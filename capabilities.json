@@ -23,6 +23,12 @@
             "name": "tooltips",
             "kind": "Grouping",
             "description": "Optional fields shown only when hovering a row."
+        },
+        {
+            "displayName": "Permissions",
+            "name": "permissions",
+            "kind": "Measure",
+            "description": "Optional: bind a DAX measure (e.g. built on USERPRINCIPALNAME()/USERNAME() looked up against a permissions table) returning a text access value for the current viewer, such as \"no-export\" or \"read-only\". Leave unbound for full functionality for everyone. This is a UI-level control in the visual, not a substitute for Row-Level Security."
         }
     ],
     "dataViewMappings": [
@@ -33,7 +39,8 @@
                         { "for": { "in": "rows" } },
                         { "for": { "in": "groupBy" } },
                         { "for": { "in": "values" } },
-                        { "for": { "in": "tooltips" } }
+                        { "for": { "in": "tooltips" } },
+                        { "for": { "in": "permissions" } }
                     ]
                 }
             }
@@ -186,7 +193,55 @@
                     "type": { "fill": { "solid": { "color": true } } }
                 }
             }
+        },
+        "userConfig": {
+            "displayName": "Saved table configuration",
+            "properties": {
+                "state": {
+                    "displayName": "Saved state (internal)",
+                    "type": { "text": true }
+                }
+            }
+        },
+        "savedView": {
+            "displayName": "Saved view (internal)",
+            "properties": {
+                "state": {
+                    "displayName": "Saved view state (internal)",
+                    "type": { "text": true }
+                }
+            }
+        },
+        "linkActions": {
+            "displayName": "Link actions",
+            "properties": {
+                "rules": {
+                    "displayName": "Link rules (JSON)",
+                    "type": { "text": true }
+                },
+                "iconColumn": {
+                    "displayName": "Icon column",
+                    "type": { "text": true }
+                },
+                "validationMessage": {
+                    "displayName": "Validation",
+                    "type": { "text": true }
+                }
+            }
         }
     },
+    "tooltips": {
+        "supportedTypes": {
+            "default": true,
+            "canvas": true
+        },
+        "roles": [
+            "tooltips"
+        ],
+        "supportEnhancedTooltips": true
+    },
+    "supportsKeyboardFocus": true,
+    "supportsLandingPage": true,
+    "supportsMultiVisualSelection": true,
     "privileges": []
 }

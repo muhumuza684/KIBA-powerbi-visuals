@@ -20,5 +20,7 @@
     "externalJS": [],
     "style": "style/visual.less",
     "capabilities": "capabilities.json",
-    "stringResources": []
+    "stringResources": [
+        "stringResources/en-US/resources.resjson"
+    ]
 }
