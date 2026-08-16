@@ -1,0 +1,55 @@
+name: Build Power BI visual
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: skiba/skiba-tables
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package the visual
+        run: npx pbiviz package
+
+      - name: Find the built .pbiviz file
+        id: find_pbiviz
+        shell: bash
+        run: |
+          FILE=$(ls dist/*.pbiviz | head -n 1)
+          echo "path=$FILE" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$FILE")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skiba-tables-pbiviz
+          path: skiba/skiba-tables/dist/*.pbiviz
+          retention-days: 30
+
+      - name: Publish/update "latest" release with the .pbiviz attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: Auto-built from the latest push to main. Not a stable/versioned release — just the newest working .pbiviz.
+          files: skiba/skiba-tables/dist/*.pbiviz
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,192 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "Rows",
+            "name": "rows",
+            "kind": "Grouping",
+            "description": "The dimensions that define each row of the table."
+        },
+        {
+            "displayName": "Values",
+            "name": "values",
+            "kind": "Measure",
+            "description": "The metrics or columns to display."
+        },
+        {
+            "displayName": "Group by",
+            "name": "groupBy",
+            "kind": "Grouping",
+            "description": "Optional field(s) to group and drill into rows. Multiple fields create nested groups."
+        },
+        {
+            "displayName": "Tooltips",
+            "name": "tooltips",
+            "kind": "Grouping",
+            "description": "Optional fields shown only when hovering a row."
+        }
+    ],
+    "dataViewMappings": [
+        {
+            "table": {
+                "rows": {
+                    "select": [
+                        { "for": { "in": "rows" } },
+                        { "for": { "in": "groupBy" } },
+                        { "for": { "in": "values" } },
+                        { "for": { "in": "tooltips" } }
+                    ]
+                }
+            }
+        }
+    ],
+    "objects": {
+        "general": {
+            "displayName": "General",
+            "properties": {
+                "fontFamily": {
+                    "displayName": "Font family",
+                    "type": { "text": true }
+                },
+                "fontSize": {
+                    "displayName": "Font size",
+                    "type": { "numeric": true }
+                },
+                "rowHeight": {
+                    "displayName": "Row height",
+                    "type": { "numeric": true }
+                }
+            }
+        },
+        "header": {
+            "displayName": "Header",
+            "properties": {
+                "bgColor": {
+                    "displayName": "Background color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "fontColor": {
+                    "displayName": "Font color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "bold": {
+                    "displayName": "Bold",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "cells": {
+            "displayName": "Cells",
+            "properties": {
+                "bgColor": {
+                    "displayName": "Background color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "fontColor": {
+                    "displayName": "Font color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "alternateRowColor": {
+                    "displayName": "Alternate row color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                }
+            }
+        },
+        "formatting": {
+            "displayName": "Data bars",
+            "properties": {
+                "enableDataBars": {
+                    "displayName": "Show data bars",
+                    "type": { "bool": true }
+                },
+                "barColor": {
+                    "displayName": "Bar color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                }
+            }
+        },
+        "totals": {
+            "displayName": "Totals",
+            "properties": {
+                "show": {
+                    "displayName": "Show totals row",
+                    "type": { "bool": true }
+                },
+                "label": {
+                    "displayName": "Label",
+                    "type": { "text": true }
+                },
+                "bgColor": {
+                    "displayName": "Background color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                }
+            }
+        },
+        "virtualScrolling": {
+            "displayName": "Smooth scrolling",
+            "properties": {
+                "enabled": {
+                    "displayName": "Enabled",
+                    "type": { "bool": true }
+                },
+                "rowHeight": {
+                    "displayName": "Row height",
+                    "type": { "numeric": true }
+                }
+            }
+        },
+        "toolbar": {
+            "displayName": "Toolbar",
+            "properties": {
+                "showMenu": {
+                    "displayName": "Show toolbar",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "search": {
+            "displayName": "Search",
+            "properties": {
+                "enabled": {
+                    "displayName": "Enable search",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "grouping": {
+            "displayName": "Grouping",
+            "properties": {
+                "defaultExpanded": {
+                    "displayName": "Expand groups by default",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "filters": {
+            "displayName": "Column filters",
+            "properties": {
+                "showIcons": {
+                    "displayName": "Show column filter icons",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "conditionalFormatting": {
+            "displayName": "Conditional formatting",
+            "properties": {
+                "enabled": {
+                    "displayName": "Enable color scale",
+                    "type": { "bool": true }
+                },
+                "minColor": {
+                    "displayName": "Low color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "maxColor": {
+                    "displayName": "High color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                }
+            }
+        }
+    },
+    "privileges": []
+}
