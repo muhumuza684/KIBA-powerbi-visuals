@@ -5,13 +5,12 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
-
-    defaults:
-      run:
-        working-directory: skiba/skiba-tables
 
     steps:
       - name: Checkout repo
@@ -24,6 +23,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit -p .
 
       - name: Package the visual
         run: npx pbiviz package
@@ -40,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: skiba-tables-pbiviz
-          path: skiba/skiba-tables/dist/*.pbiviz
+          path: dist/*.pbiviz
           retention-days: 30
 
       - name: Publish/update "latest" release with the .pbiviz attached
@@ -49,7 +51,7 @@ jobs:
           tag_name: latest
           name: Latest build
           body: Auto-built from the latest push to main. Not a stable/versioned release — just the newest working .pbiviz.
-          files: skiba/skiba-tables/dist/*.pbiviz
+          files: dist/*.pbiviz
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
