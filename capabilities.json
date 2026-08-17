@@ -41,7 +41,10 @@
                         { "for": { "in": "values" } },
                         { "for": { "in": "tooltips" } },
                         { "for": { "in": "permissions" } }
-                    ]
+                    ],
+                    "dataReductionAlgorithm": {
+                        "window": { "count": 30000 }
+                    }
                 }
             }
         }
