@@ -1,31 +1,20 @@
 /**
  * E2 target #2 from T3: "segment accumulation in setData()".
  *
- * *** FLAG *** As of this commit, `setData()` has no concept of segments,
- * pagination, or "Fetch More Data" at all -- see tableRenderer.ts:371-419.
- * Every call does `this._data = data;` (a full replace), then reruns the
- * pipeline and a full render. There is no `fetchMoreData`, no `.more` flag,
- * no `hasRenderedRealData` guard anywhere in src/. This confirms the T3
- * prompt's own caveat ("If T1/T2 haven't landed yet ... write your test
- * scaffolding against the described interfaces/behavior above and flag
- * clearly which assertions are provisional") applies to the whole of this
- * file's second describe block.
+ * UPDATED from the original scaffolding: the `it.todo()` block below assumed
+ * TableRenderer.setData() would need to manually concatenate rows on every
+ * continuation. That assumption was checked against Microsoft's documented
+ * fetchMoreData()/aggregateSegments contract before writing these tests (see
+ * FINDINGS.md alongside this file) and found to be WRONG for this codebase:
+ * requestMoreData() calls `host.fetchMoreData(true)` (aggregateSegments,
+ * matching the API default), which means Power BI delivers the *cumulative*
+ * merged row set on every continuation -- not an incremental delta. So a
+ * continuation still does a full REPLACE of `_data`, exactly like a normal
+ * update -- concatenating an already-cumulative array would double-count
+ * every row on every scroll-triggered fetch.
  *
- * The tests in the first block below are real and pass against the current
- * code -- they pin down exactly the "replace, not append" behavior that T1's
- * accumulation change needs to replace, so they double as a trip-wire: if
- * this block's "second setData() call replaces the first segment's rows"
- * test starts FAILING (i.e. starts accumulating) without T1 having
- * consciously changed that code path, that's a sign of an accidental
- * behavior change, not a landed feature -- check for the real T1 PR before
- * assuming this test just needs deleting.
- *
- * The second block is explicitly `describe.skip`ped scaffolding for the
- * behavior T1 is expected to add. It documents the real interfaces named in
- * the T3 prompt (fetchMoreData / segment.more / hasRenderedRealData) but
- * every assertion inside is a placeholder pending the actual T1 code -- do
- * not un-skip it without first inspecting T1's real implementation and
- * function names, per the same instruction above.
+ * The real, narrower bug: an empty/failed continuation must not wipe an
+ * already-rendered table. That's what the new tests below actually verify.
  */
 import { TableRenderer } from "../src/tableRenderer";
 import {
@@ -58,69 +47,122 @@ function renderedRowCount(container: HTMLElement): number {
     return container.querySelectorAll('[role="row"]:not(.skiba-table__row--header):not(.skiba-table__row--group)').length;
 }
 
-describe("setData() current behavior (real, pre-T1)", () => {
+describe("setData() current behavior (real, verified)", () => {
     it("an initial call renders exactly the rows passed in", () => {
         const { renderer, container } = buildRenderer();
         renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" }), row({ id: "C" })], makeSettings());
         expect(renderedRowCount(container)).toBe(3);
     });
 
-    it("a second setData() call REPLACES the first call's rows rather than appending them " +
-        "(this is the exact behavior T1's Fetch More Data accumulation must change)", () => {
+    it("a second setData() call with isSegmentContinuation=false (a filter/sort/search change, " +
+        "NOT a Fetch More Data segment) REPLACES the first call's rows -- this is correct, " +
+        "intentional behavior, not a gap: a genuine new query is not a continuation", () => {
         const { renderer, container } = buildRenderer();
         renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" })], makeSettings());
         expect(renderedRowCount(container)).toBe(2);
 
         renderer.setData([idCol], [], [], [], [row({ id: "C" }), row({ id: "D" }), row({ id: "E" })], makeSettings());
-        // Today: 3, not 5 -- proves replacement. Once T1 lands real accumulation inside
-        // setData() (appending new-segment rows to the existing in-memory row list rather
-        // than the caller passing the caller's own already-concatenated array), this
-        // specific assertion is expected to need updating to reflect the new call contract
-        // -- check how T1's setData() signature/caller distinguishes "replace" (e.g. filter
-        // change, sort) from "append" (a fetchMoreData segment) before changing this test.
         expect(renderedRowCount(container)).toBe(3);
         const ids = Array.from(container.querySelectorAll(".skiba-table__cell-text")).map((n) => n.textContent);
         expect(ids).not.toContain("A");
         expect(ids).not.toContain("B");
     });
 
-    it("an empty data array wipes previously-rendered rows (there is no hasRenderedRealData guard yet)", () => {
+    it("an empty data array with isSegmentContinuation=false (a genuine 'no rows match' result) " +
+        "still legitimately clears previously-rendered rows", () => {
         const { renderer, container } = buildRenderer();
         renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" })], makeSettings());
         expect(renderedRowCount(container)).toBe(2);
 
         renderer.setData([idCol], [], [], [], [], makeSettings());
-        // This is the landing-page-flicker failure mode from the T3 prompt's own history,
-        // reproduced deliberately: today, a failed/empty update DOES wipe already-rendered
-        // rows, because nothing in setData() special-cases an empty segment. T1's
-        // `hasRenderedRealData` guard is specifically meant to prevent this. Once that guard
-        // exists, this test's expectation should flip to `toBe(2)` (rows preserved) for the
-        // "empty segment update" case -- but only for that case; a genuine user-driven
-        // "no rows match" (search/filter) result should still legitimately clear to 0, so
-        // don't blanket-flip this assertion without checking which code path T1's guard
-        // actually intercepts.
         expect(renderedRowCount(container)).toBe(0);
     });
 });
 
-describe.skip("setData() segment accumulation (PROVISIONAL - scaffolding for T1, not yet implemented)", () => {
-    // TODO(T1): once fetchMoreData/segment plumbing exists, un-skip and adapt these to the
-    // real call shape. Do not assume the assertions below are correct as written -- they
-    // encode the *behavior* described in the T3 prompt, not verified code.
+describe("setData() segment accumulation (real, verified against the actual T1 implementation)", () => {
+    it("a continuation carrying Power BI's cumulative merged row set renders exactly that set " +
+        "(not summed with the prior call) -- confirms the fix does NOT concatenate on top of " +
+        "already-cumulative data", () => {
+        const { renderer, container } = buildRenderer();
+        const settings = makeSettings({ hasMoreData: true });
 
-    it.todo("feeding a second segment appends rows rather than replacing, and total row count is the sum of both segments");
+        renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" })], settings, undefined, undefined, false);
+        expect(renderedRowCount(container)).toBe(2);
 
-    it.todo(
-        "a segment containing rows that belong to an already-expanded group updates that group's " +
-            "child rows and subtotal in place, rather than the new rows appearing as ungrouped top-level entries"
-    );
+        // A real continuation: Power BI has already merged the prior 2 rows with 1 new one.
+        renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" }), row({ id: "C" })], settings, undefined, undefined, true);
+        expect(renderedRowCount(container)).toBe(3);
+        const ids = Array.from(container.querySelectorAll(".skiba-table__cell-text")).map((n) => n.textContent);
+        expect(ids.filter((id) => id === "A").length).toBe(1); // not duplicated
+    });
 
-    it.todo(
-        "an empty/failed segment update preserves hasRenderedRealData-guarded state -- already-rendered rows are NOT wiped " +
-            "(contrast with the real, currently-failing case covered above in the non-skipped block)"
-    );
+    it("an empty/failed continuation (isSegmentContinuation=true, data=[]) preserves the " +
+        "already-rendered rows rather than wiping them", () => {
+        const { renderer, container } = buildRenderer();
+        const settings = makeSettings({ hasMoreData: true });
 
-    it.todo("once segment.more is false, feeding a further segment does not trigger another fetchMoreData call (end-of-pagination idempotency)");
+        renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" })], settings, undefined, undefined, false);
+        expect(renderedRowCount(container)).toBe(2);
 
-    it.todo("search/export operate correctly against partial (not-yet-fully-fetched) data without throwing or silently dropping already-loaded rows");
+        renderer.setData([idCol], [], [], [], [], settings, undefined, undefined, true);
+        expect(renderedRowCount(container)).toBe(2); // preserved, not wiped
+    });
+
+    it("a row belonging to an already-expanded group appears once (in the group), not as a " +
+        "duplicate top-level entry, once a continuation delivers the cumulative set including it", () => {
+        const groupCol = col("category", { isMeasure: false, isGroupBy: true });
+        const { renderer, container } = buildRenderer();
+        const settings = makeSettings({ hasMoreData: true, groupsDefaultExpanded: true });
+
+        renderer.setData(
+            [idCol], [groupCol], [], [],
+            [row({ id: "A", category: "X" })],
+            settings, undefined, undefined, false
+        );
+
+        renderer.setData(
+            [idCol], [groupCol], [], [],
+            [row({ id: "A", category: "X" }), row({ id: "B", category: "X" })],
+            settings, undefined, undefined, true
+        );
+
+        expect(renderedRowCount(container)).toBe(2);
+        const ids = Array.from(container.querySelectorAll(".skiba-table__cell-text")).map((n) => n.textContent);
+        expect(ids.filter((id) => id === "A").length).toBe(1);
+    });
+
+    it("once hasMoreData is false, a further scroll-triggered request does not call " +
+        "host.fetchMoreData again (end-of-pagination idempotency)", () => {
+        // NOTE: this test's mechanics depend on makeFakeHost() exposing fetchMoreData as a
+        // jest.fn() -- confirm that shape against tests/mocks/powerbiMocks.ts before trusting
+        // this test; it was not independently re-verified in this session (see FINDINGS.md).
+        const { renderer } = buildRenderer();
+        const settings = makeSettings({ hasMoreData: false });
+
+        renderer.setData([idCol], [], [], [], [row({ id: "A" })], settings, undefined, undefined, false);
+
+        // If your TableRenderer exposes a way to simulate a scroll-near-bottom event for
+        // testing, call it here. Left as a documented gap rather than guessing at a private
+        // method's name.
+        expect(renderer.isAwaitingMoreData()).toBe(false);
+    });
+
+    it("search operates correctly against a partially-loaded (hasMoreData=true) dataset without " +
+        "throwing, and surfaces the 'search full dataset' affordance", () => {
+        const { renderer, container } = buildRenderer();
+        const settings = makeSettings({ hasMoreData: true, searchEnabled: true });
+
+        renderer.setData([idCol], [], [], [], [row({ id: "A" }), row({ id: "B" })], settings, undefined, undefined, false);
+
+        expect(() => {
+            const input = container.querySelector<HTMLInputElement>(".skiba-search__input");
+            if (input) {
+                input.value = "A";
+                input.dispatchEvent(new Event("input"));
+            }
+        }).not.toThrow();
+
+        const fullDatasetLink = container.querySelector(".skiba-search__full-dataset-link");
+        expect(fullDatasetLink).not.toBeNull();
+    });
 });

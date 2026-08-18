@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 import * as d3 from "d3";
 import * as XLSX from "xlsx";
@@ -392,7 +392,18 @@ export class TableRenderer {
         this.groupColumns = groupColumns;
         this.valueColumns = valueColumns;
         this.tooltipColumns = tooltipColumns;
-        this._data = data;
+        // Verified against Microsoft's documented fetchMoreData contract (see FINDINGS.md):
+        // with aggregateSegments left at its default (true) -- see requestMoreData() below --
+        // each continuation's data already contains the full cumulative row set (prior
+        // segments + the new one), merged by Power BI itself. So a continuation still does a
+        // full REPLACE, not a concat -- concatenating an already-cumulative array here would
+        // double-count every row on every scroll-triggered fetch. The one real gap: an empty/
+        // failed continuation (isSegmentContinuation true, data empty) must not wipe an
+        // already-rendered table -- a genuine empty result from a real filter/search/sort
+        // change (isSegmentContinuation false) still legitimately clears.
+        if (!(isSegmentContinuation && data.length === 0)) {
+            this._data = data;
+        }
         this.settings = settings;
 
         this._isFetchingMore = false;
@@ -490,7 +501,11 @@ export class TableRenderer {
         if (typeof this.host.fetchMoreData !== "function") {
             return;
         }
-        const accepted = this.host.fetchMoreData();
+        // Explicit `true` (matches the API default) rather than relying on the implicit
+        // default, since the whole segment-accumulation design in setData() above depends on
+        // Power BI delivering the cumulative merged row set on each continuation, not a raw
+        // incremental delta. See FINDINGS.md for the verified source of this contract.
+        const accepted = this.host.fetchMoreData(true);
         if (accepted) {
             this._isFetchingMore = true;
             this.renderLoadingMoreIndicator();

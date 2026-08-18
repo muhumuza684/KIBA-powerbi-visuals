@@ -194,6 +194,13 @@ export class SkibaTables implements IVisual {
         }
 
         if (!table || !table.rows || table.rows.length === 0 || !table.columns || table.columns.length === 0) {
+            if (isSegmentContinuation && this.hasRenderedRealData) {
+                // Same class of transient/trailing update as the landing-page guard above --
+                // an empty or failed segment continuation must not wipe an already-rendered
+                // table. A genuine empty result from a real query change is not a segment
+                // continuation, so it still correctly clears via renderEmptyState() below.
+                return;
+            }
             this.tableRenderer.renderEmptyState();
             return;
         }
