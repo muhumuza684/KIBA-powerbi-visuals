@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 import * as d3 from "d3";
 import * as XLSX from "xlsx";
@@ -28,9 +28,9 @@ export interface ITableColumn {
     displayName: string;
     isMeasure: boolean;
     isGroupBy: boolean;
-    /** True for a user-defined "Calculations" column (Item 1) — behaves like any other measure column. */
+    /** True for a user-defined "Calculations" column (Item 1) â€” behaves like any other measure column. */
     isCalculated?: boolean;
-    /** True for a user-defined "Combine columns" column (Item 4) — behaves like a text row column. */
+    /** True for a user-defined "Combine columns" column (Item 4) â€” behaves like a text row column. */
     isCombined?: boolean;
 }
 
@@ -91,6 +91,9 @@ export interface ITableRendererSettings {
     savedViewState: ISavedViewState | null;
     /** Allow Interactions compliance (item 10): false in read-only/embedded host contexts. */
     allowInteractions: boolean;
+    /** Fetch More Data (A1-A4): true while Power BI still has more row segments beyond what's
+     *  currently loaded. Read from dataView.metadata.segment by visual.ts. */
+    hasMoreData: boolean;
 }
 
 type SortDirection = "asc" | "desc" | "none";
@@ -143,7 +146,7 @@ type RenderNode =
     | { kind: "detail"; depth: number; row: ITableRow };
 
 const ROW_BUFFER = 6; // extra rows rendered above/below viewport to avoid flicker while scrolling
-const GROUP_SEP = "\u241F"; // unit separator — safe delimiter for building unique group path keys
+const GROUP_SEP = "\u241F"; // unit separator â€” safe delimiter for building unique group path keys
 
 /**
  * TableRenderer owns everything that happens inside the scrollable table
@@ -184,6 +187,12 @@ export class TableRenderer {
     private _columnMinMax: Map<string, { min: number; max: number }> = new Map();
     private columnMaxCache: Map<string, number> = new Map();
 
+    // Fetch More Data (D1/D2/A1-A4) -----------------------------------------------------
+    private _isFetchingMore = false;
+    private _hasMoreData = false;
+    private _forceFetchAllReason: "search" | "export-csv" | "export-excel" | "export-pdf" | null = null;
+    private _scrollListenerAttached = false;
+
     // Item 1: calculated columns (name -> formula/parsed AST)
     private _calcColumns: Map<string, ICalcColumnDef> = new Map();
     // Item 4: combined columns (name -> template string)
@@ -191,11 +200,11 @@ export class TableRenderer {
     // Tracks which virtual (calculated/combined) column names are currently materialized into row.values,
     // so they can be cleanly removed/recomputed without leaking stale keys.
     private _virtualColumnNames: Set<string> = new Set();
-    // Item 3: sparklines — set of measure column names with the trend indicator turned on
+    // Item 3: sparklines â€” set of measure column names with the trend indicator turned on
     private _sparklineColumns: Set<string> = new Set();
-    // Item 2: drag-to-pivot — the single row column currently promoted to a group-by, if any
+    // Item 2: drag-to-pivot â€” the single row column currently promoted to a group-by, if any
     private _dragGroupColumn: ITableColumn | null = null;
-    // Item 5: true drill-down — leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
+    // Item 5: true drill-down â€” leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
     private _expandedDetailRows: Set<string> = new Set();
     // Per-node pixel offsets into the virtualized body, aligned with _renderNodes; recomputed whenever
     // the node list changes, since detail nodes have a variable height unlike the uniform-height rows/groups.
@@ -307,7 +316,7 @@ export class TableRenderer {
         this.container.appendChild(this.searchRoot);
 
         // Item 2: drag-to-pivot drop target. Invisible until a column header drag starts
-        // (progressive disclosure) — see renderHeader()'s dragstart/dragend handlers.
+        // (progressive disclosure) â€” see renderHeader()'s dragstart/dragend handlers.
         this.pivotDropRoot = document.createElement("div");
         this.pivotDropRoot.className = "skiba-pivot-drop";
         this.pivotDropRoot.textContent = "Drop here to group by this column";
@@ -376,7 +385,8 @@ export class TableRenderer {
         data: ITableRow[],
         settings: ITableRendererSettings,
         persistedStateJson?: string,
-        reportTitle?: string
+        reportTitle?: string,
+        isSegmentContinuation: boolean = false
     ): void {
         this.rowColumns = rowColumns;
         this.groupColumns = groupColumns;
@@ -384,6 +394,24 @@ export class TableRenderer {
         this.tooltipColumns = tooltipColumns;
         this._data = data;
         this.settings = settings;
+
+        this._isFetchingMore = false;
+        this._hasMoreData = settings.hasMoreData;
+        this.renderLoadingMoreIndicator();
+
+        if (this._forceFetchAllReason) {
+            if (this._hasMoreData) {
+                this.requestMoreData();
+                this.renderForceFetchProgress();
+            } else {
+                this.completeForceFetchAll();
+            }
+        }
+
+        if (!this._scrollListenerAttached) {
+            this._scrollListenerAttached = true;
+            this.scrollRoot.addEventListener("scroll", () => this.maybeRequestMoreDataFromScroll());
+        }
         this._persistedViewState = settings.savedViewState;
         this.defaultRowHeight = settings.virtualScrollEnabled ? settings.virtualScrollRowHeight : settings.rowHeight;
         if (reportTitle) {
@@ -392,7 +420,7 @@ export class TableRenderer {
 
         // Calculations/combined columns/sparklines/drag-pivot are saved onto the report so a
         // page refresh or reload never silently discards a user's calculated columns (Items 1 & 4
-        // explicitly must not be lost). Hydrate exactly once — subsequent updates keep the live,
+        // explicitly must not be lost). Hydrate exactly once â€” subsequent updates keep the live,
         // in-memory state so an in-flight persistProperties() write can't be raced by a redraw.
         if (!this._hydratedFromPersist) {
             if (persistedStateJson) {
@@ -415,7 +443,13 @@ export class TableRenderer {
 
         this.computeColumnStats();
         this.applyPipeline();
-        this.render();
+
+        if (isSegmentContinuation) {
+            this.renderVisibleRows();
+            this.renderStatusLine();
+        } else {
+            this.render();
+        }
     }
 
     /** Full re-render: toolbar, search bar, pivot chip, filter chips, header row, and the virtualized body. */
@@ -427,6 +461,108 @@ export class TableRenderer {
         this.renderFilterChips();
         this.renderHeader();
         this.renderVisibleRows();
+    }
+
+    // -----------------------------------------------------------------
+    // Fetch More Data (D1, D2, A1-A4)
+    // -----------------------------------------------------------------
+
+    private isExportRestricted(): boolean {
+        return this.settings.permission === "no-export" || this.settings.permission === "read-only";
+    }
+
+    public isAwaitingMoreData(): boolean {
+        return this._isFetchingMore;
+    }
+
+    private maybeRequestMoreDataFromScroll(): void {
+        const threshold = this.scrollRoot.clientHeight || 400;
+        const distanceFromBottom = this._totalContentHeight - (this.scrollRoot.scrollTop + this.scrollRoot.clientHeight);
+        if (distanceFromBottom <= threshold) {
+            this.requestMoreData();
+        }
+    }
+
+    private requestMoreData(): void {
+        if (!this._hasMoreData || this._isFetchingMore || this.isExportRestricted()) {
+            return;
+        }
+        if (typeof this.host.fetchMoreData !== "function") {
+            return;
+        }
+        const accepted = this.host.fetchMoreData();
+        if (accepted) {
+            this._isFetchingMore = true;
+            this.renderLoadingMoreIndicator();
+        }
+    }
+
+    private renderLoadingMoreIndicator(): void {
+        this.container.querySelectorAll(".skiba-fetch-more-indicator").forEach((el) => el.remove());
+        if (!this._isFetchingMore || this._forceFetchAllReason) {
+            return;
+        }
+        const indicator = document.createElement("div");
+        indicator.className = "skiba-fetch-more-indicator";
+        indicator.setAttribute("role", "status");
+        indicator.setAttribute("aria-live", "polite");
+        indicator.textContent = this.loc("FetchMore_Loading", "Loading more rows\u2026");
+        this.container.appendChild(indicator);
+    }
+
+    private beginForceFetchAll(reason: "search" | "export-csv" | "export-excel" | "export-pdf"): void {
+        if (!this._hasMoreData) {
+            this.runForceFetchAction(reason);
+            return;
+        }
+        this._forceFetchAllReason = reason;
+        this.renderForceFetchProgress();
+        this.requestMoreData();
+    }
+
+    private completeForceFetchAll(): void {
+        const reason = this._forceFetchAllReason;
+        this._forceFetchAllReason = null;
+        this.renderForceFetchProgress();
+        if (reason) {
+            this.runForceFetchAction(reason);
+        }
+    }
+
+    private runForceFetchAction(reason: "search" | "export-csv" | "export-excel" | "export-pdf"): void {
+        switch (reason) {
+            case "search": this.renderStatusLine(); break;
+            case "export-csv": this.exportCSV(); break;
+            case "export-excel": this.exportExcel(); break;
+            case "export-pdf": this.exportPDF(); break;
+        }
+    }
+
+    private renderForceFetchProgress(): void {
+        this.container.querySelectorAll(".skiba-force-fetch-progress").forEach((el) => el.remove());
+        if (!this._forceFetchAllReason) {
+            return;
+        }
+        const progress = document.createElement("div");
+        progress.className = "skiba-force-fetch-progress";
+        progress.setAttribute("role", "status");
+        progress.setAttribute("aria-live", "polite");
+
+        const labelKey = this._forceFetchAllReason === "search" ? "FetchMore_LoadingForSearch" : "FetchMore_LoadingForExport";
+        const labelFallback = this._forceFetchAllReason === "search"
+            ? "Loading the rest of the dataset to search\u2026 ({0} rows loaded so far)"
+            : "Loading the rest of the dataset before exporting\u2026 ({0} rows loaded so far)";
+
+        const spinner = document.createElement("span");
+        spinner.className = "skiba-spinner";
+        spinner.setAttribute("aria-hidden", "true");
+        progress.appendChild(spinner);
+
+        const text = document.createElement("span");
+        text.textContent = this.loc(labelKey, labelFallback, String(this._data.length));
+        progress.appendChild(text);
+
+        this.container.insertBefore(progress, this.container.firstChild);
     }
 
     // -----------------------------------------------------------------
@@ -537,7 +673,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Persistence — saves calc/combined columns, sparkline toggles, and the
+    // Persistence â€” saves calc/combined columns, sparkline toggles, and the
     // drag-to-pivot column onto the report so user work is never silently lost.
     // -----------------------------------------------------------------
 
@@ -595,7 +731,7 @@ export class TableRenderer {
                 this._pendingDragGroupName = state.dragGroup;
             }
         } catch {
-            // Corrupt or pre-upgrade persisted state — start clean rather than crashing the visual.
+            // Corrupt or pre-upgrade persisted state â€” start clean rather than crashing the visual.
         }
     }
 
@@ -704,7 +840,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Toolbar (minimal floating menu — progressive disclosure)
+    // Toolbar (minimal floating menu â€” progressive disclosure)
     // -----------------------------------------------------------------
 
     private renderToolbar(): void {
@@ -795,7 +931,7 @@ export class TableRenderer {
             label.appendChild(document.createTextNode(col.displayName));
             rowWrap.appendChild(label);
 
-            // Item 3: sparklines — genuinely optional per numeric column, never forced on.
+            // Item 3: sparklines â€” genuinely optional per numeric column, never forced on.
             if (col.isMeasure) {
                 const sparkLabel = document.createElement("label");
                 sparkLabel.className = "skiba-toolbar__checkbox skiba-toolbar__checkbox--sparkline";
@@ -846,17 +982,17 @@ export class TableRenderer {
         // the underlying data. When the "permissions" data role is left unbound,
         // `this.settings.permission` is null and every control below renders as
         // it always has.
-        const isNoExport = this.settings.permission === "no-export" || this.settings.permission === "read-only";
+        const isNoExport = this.isExportRestricted();
         const isReadOnly = this.settings.permission === "read-only";
 
         if (!isNoExport) {
-            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportCSV", "Export CSV"), () => this.exportCSV()));
-            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportExcel", "Export Excel"), () => this.exportExcel()));
-            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportPDF", "Export PDF"), () => this.exportPDF()));
+            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportCSV", "Export CSV"), () => this.beginForceFetchAll("export-csv")));
+            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportExcel", "Export Excel"), () => this.beginForceFetchAll("export-excel")));
+            menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExportPDF", "Export PDF"), () => this.beginForceFetchAll("export-pdf")));
             menu.appendChild(this.makeDivider());
         }
 
-        // Reset sorts / filters — harmless, no confirmation needed
+        // Reset sorts / filters â€” harmless, no confirmation needed
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetSorts", "Reset sorts"), () => {
             this.resetSorts();
             closeMenu();
@@ -867,7 +1003,7 @@ export class TableRenderer {
             closeMenu();
         }));
 
-        // Reset column widths / order — discards user customization, so confirm first
+        // Reset column widths / order â€” discards user customization, so confirm first
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetColumnWidths", "Reset column widths"), () => {
             if (this._columnWidths.size === 0) {
                 this.resetColumnWidths();
@@ -906,7 +1042,7 @@ export class TableRenderer {
     }
 
     /**
-     * "Save current view as default" — a normal button unless a default view
+     * "Save current view as default" â€” a normal button unless a default view
      * already exists, in which case a click swaps the button for a brief inline
      * confirmation (not a browser confirm() dialog) before overwriting it, since
      * doing so affects every other viewer of this shared report.
@@ -927,7 +1063,7 @@ export class TableRenderer {
 
             const msg = document.createElement("div");
             msg.className = "skiba-toolbar__confirm-msg";
-            msg.textContent = "This replaces the current default view for everyone who opens this report — save?";
+            msg.textContent = "This replaces the current default view for everyone who opens this report â€” save?";
             confirmBox.appendChild(msg);
 
             const actions = document.createElement("div");
@@ -959,7 +1095,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Item 1: "Calculations" toolbar section — add a calculated column
+    // Item 1: "Calculations" toolbar section â€” add a calculated column
     // -----------------------------------------------------------------
 
     private renderCalculationsSection(menu: HTMLDivElement, closeMenu: () => void): void {
@@ -1177,7 +1313,7 @@ export class TableRenderer {
         del.setAttribute("aria-label", `Remove ${name}`);
         del.addEventListener("click", (evt) => {
             evt.stopPropagation();
-            // Destructive (discards a saved calculation) — confirm before applying, per the design charter.
+            // Destructive (discards a saved calculation) â€” confirm before applying, per the design charter.
             if (window.confirm(confirmMessage)) {
                 onDelete();
             }
@@ -1240,16 +1376,31 @@ export class TableRenderer {
         if (!status) {
             return;
         }
+        this.clearElement(status);
+
         if (this._searchTerm.trim().length === 0 && this._columnFilters.size === 0) {
-            status.textContent = "";
             return;
         }
-        status.textContent = this.loc(
+
+        const matchText = document.createElement("span");
+        matchText.textContent = this.loc(
             "Search_StatusMatch",
             "{0} of {1} rows match",
             String(this._filteredData.length),
             String(this._data.length)
         );
+        status.appendChild(matchText);
+
+        if (this._searchTerm.trim().length > 0 && this._hasMoreData && !this.isExportRestricted()) {
+            const link = document.createElement("button");
+            link.type = "button";
+            link.className = "skiba-search__full-dataset-link";
+            link.textContent = this.loc("Search_FullDataset", "Search full dataset");
+            link.setAttribute("aria-label", this.loc("Search_FullDatasetAriaLabel", "Search the full dataset, including rows not yet loaded"));
+            link.addEventListener("click", () => this.beginForceFetchAll("search"));
+            status.appendChild(document.createTextNode(" \u2014 "));
+            status.appendChild(link);
+        }
     }
 
     // -----------------------------------------------------------------
@@ -2106,7 +2257,7 @@ export class TableRenderer {
         head.appendChild(label);
         rowEl.appendChild(head);
 
-        // Item 5: the group row is the disclosure control for its detail sub-grid — keyboard
+        // Item 5: the group row is the disclosure control for its detail sub-grid â€” keyboard
         // accessible and ARIA-labelled, matching the pattern already used by header sort buttons.
         // Full Keyboard Navigation (item 14): group rows toggle expand/collapse via Enter/Space,
         // like the header sort cells and data rows below. Local UI state (not a cross-filter
@@ -2371,7 +2522,7 @@ export class TableRenderer {
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("width", String(w));
         svg.setAttribute("height", String(h));
-        svg.setAttribute("aria-hidden", "true"); // decorative — the exact value is already in the cell text
+        svg.setAttribute("aria-hidden", "true"); // decorative â€” the exact value is already in the cell text
         svg.setAttribute("focusable", "false");
 
         const polyline = document.createElementNS(svgNS, "polyline");
@@ -2421,7 +2572,7 @@ export class TableRenderer {
 
         const linkBtn = document.createElement("button");
         linkBtn.className = "skiba-link-icon";
-        linkBtn.textContent = "\u2197"; // ↗ — reuses the same plain Unicode-glyph icon pattern as the gear/chevron/sort-arrow icons elsewhere in this file, no new icon font/library
+        linkBtn.textContent = "\u2197"; // â†— â€” reuses the same plain Unicode-glyph icon pattern as the gear/chevron/sort-arrow icons elsewhere in this file, no new icon font/library
         linkBtn.setAttribute("aria-label", "Open linked page");
         linkBtn.title = "Open linked page";
         linkBtn.addEventListener("click", (evt) => {
@@ -2458,7 +2609,7 @@ export class TableRenderer {
             return String(raw).toLowerCase().indexOf(rule.value.toLowerCase()) !== -1;
         }
 
-        // gt / gte / lt / lte — numeric comparison
+        // gt / gte / lt / lte â€” numeric comparison
         const numRaw = typeof raw === "number" ? raw : parseFloat(String(raw));
         const numRule = parseFloat(rule.value);
         if (isNaN(numRaw) || isNaN(numRule)) {
@@ -2540,7 +2691,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Smart tooltips (mean / deviation) — insight without extra UI
+    // Smart tooltips (mean / deviation) â€” insight without extra UI
     // -----------------------------------------------------------------
 
     private computeColumnStats(): void {
@@ -2650,7 +2801,7 @@ export class TableRenderer {
         this.downloadBlob(blob, "skiba-tables-export.csv");
     }
 
-    /** Real .xlsx export via SheetJS — requires `npm install xlsx --save` in the project. */
+    /** Real .xlsx export via SheetJS â€” requires `npm install xlsx --save` in the project. */
     private exportExcel(): void {
         const visibleColumns = this.visibleColumns();
         const header = visibleColumns.map((c) => c.displayName);
@@ -2676,7 +2827,7 @@ export class TableRenderer {
 
     /**
      * Dedicated multi-page PDF export via jsPDF + jspdf-autotable. Replaces the old
-     * window.print()-based path entirely — one clear "Export PDF" behavior. Exports exactly
+     * window.print()-based path entirely â€” one clear "Export PDF" behavior. Exports exactly
      * what's on screen: current search/sort/column-filter/grouping state, not the raw data.
      */
     private exportPDF(): void {

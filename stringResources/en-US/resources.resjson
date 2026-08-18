@@ -1,4 +1,4 @@
-{
+﻿{
     "Skiba_Toolbar_Label": "Table options",
     "Skiba_Toolbar_ShowColumns": "Show columns",
     "Skiba_Toolbar_ExpandAllGroups": "Expand all groups",
@@ -45,5 +45,12 @@
     "Skiba_LandingPage_Tagline": "Next-Gen Analytical Tables",
     "Skiba_LandingPage_Helper": "Add fields to Rows and Values to see your table. Use Group by to build collapsible drill-down groups, and Tooltips for hover-only detail.",
 
-    "Skiba_Render_FailedReason": "Skiba Tables failed to render: {0}"
+    "Skiba_Render_FailedReason": "Skiba Tables failed to render: {0}",
+    "Skiba_Search_FullDataset": "Search full dataset",
+    "Skiba_Search_FullDatasetAriaLabel": "Search the full dataset, including rows not yet loaded",
+    "Skiba_Visual_RowCount_Partial": "{0} of {1}+ loaded",
+    "Skiba_Visual_RowCount_PartialUnknownTotal": "{0}+ rows loaded, more available",
+    "Skiba_Visual_RowCount_Complete": "{0} rows",
+    "Skiba_Visual_FetchMore_Failed": "Couldn't load more rows \u2014",
+    "Skiba_Visual_FetchMore_Retry": "Retry"
 }

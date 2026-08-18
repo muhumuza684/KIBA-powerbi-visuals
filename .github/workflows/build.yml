@@ -27,6 +27,13 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit -p .
 
+      # E2 (T3): automated regression suite for the highest-risk logic (color resolution,
+      # setData()/segment handling). Runs before packaging so a regression blocks the build
+      # the same way a type-check failure does, rather than only surfacing after a .pbiviz
+      # has already been produced and released.
+      - name: Run unit tests
+        run: npm run test:ci
+
       - name: Package the visual
         run: npx pbiviz package
 

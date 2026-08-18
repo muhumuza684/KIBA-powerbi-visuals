@@ -1,12 +1,13 @@
 {
     "name": "skiba-tables",
     "version": "1.0.0",
-    "description": "Skiba Tables — next-gen analytical tables for Power BI, by Skiba Analytics",
+    "description": "Skiba Tables â€” next-gen analytical tables for Power BI, by Skiba Analytics",
     "private": true,
     "scripts": {
         "start": "pbiviz start",
         "package": "pbiviz package",
-        "lint": "eslint . --ext .ts"
+        "lint": "eslint . --ext .ts",
+        "test": "jest"
     },
     "author": "Skiba Analytics",
     "license": "UNLICENSED",
@@ -20,8 +21,12 @@
     },
     "devDependencies": {
         "@types/d3": "^7.4.3",
+        "@types/jest": "^29.5.12",
+        "jest": "^29.7.0",
+        "jest-environment-jsdom": "^30.4.1",
         "less": "^4.2.0",
         "powerbi-visuals-tools": "^7.2.1",
+        "ts-jest": "^29.1.2",
         "typescript": "^5.4.5"
     }
 }

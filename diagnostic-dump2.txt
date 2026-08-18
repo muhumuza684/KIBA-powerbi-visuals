@@ -1,0 +1,127 @@
+﻿===== renderLandingPage =====
+
+> src\tableRenderer.ts:2824:    public renderLandingPage(): void {
+  src\tableRenderer.ts:2825:        this.clearElement(this.container);
+  src\tableRenderer.ts:2826:        const wrap = document.createElement("div");
+  src\tableRenderer.ts:2827:        wrap.className = "skiba-empty-state skiba-landing-page";
+  src\tableRenderer.ts:2828:
+  src\tableRenderer.ts:2829:        const brand = document.createElement("div");
+  src\tableRenderer.ts:2830:        brand.className = "skiba-empty-state__brand";
+  src\tableRenderer.ts:2831:        brand.textContent = this.loc("Landing_Brand", "SKIBA ANALYTICS");
+  src\tableRenderer.ts:2832:        wrap.appendChild(brand);
+  src\tableRenderer.ts:2833:
+  src\tableRenderer.ts:2834:        const tagline = document.createElement("div");
+  src\tableRenderer.ts:2835:        tagline.className = "skiba-empty-state__tagline";
+  src\tableRenderer.ts:2836:        tagline.textContent = this.loc("Landing_Tagline", "Skiba Tables");
+  src\tableRenderer.ts:2837:        wrap.appendChild(tagline);
+  src\tableRenderer.ts:2838:
+  src\tableRenderer.ts:2839:        const description = document.createElement("div");
+  src\tableRenderer.ts:2840:        description.className = "skiba-landing-page__description";
+  src\tableRenderer.ts:2841:        description.textContent = this.loc(
+  src\tableRenderer.ts:2842:            "Landing_Description",
+  src\tableRenderer.ts:2843:            "The fastest, cleanest, most intuitive way to view, slice, and export your Power BI data 
+\u2014 without enterprise bloat."
+  src\tableRenderer.ts:2844:        );
+  src\tableRenderer.ts:2845:        wrap.appendChild(description);
+  src\tableRenderer.ts:2846:
+  src\tableRenderer.ts:2847:        const helper = document.createElement("div");
+  src\tableRenderer.ts:2848:        helper.className = "skiba-empty-state__helper";
+  src\tableRenderer.ts:2849:        helper.textContent = this.loc("Landing_Helper", "Add fields to Rows and Values to see your 
+table.");
+  src\tableRenderer.ts:2850:        wrap.appendChild(helper);
+  src\tableRenderer.ts:2851:
+  src\tableRenderer.ts:2852:        this.container.appendChild(wrap);
+  src\tableRenderer.ts:2853:    }
+  src\tableRenderer.ts:2854:}
+
+
+
+
+===== renderEmptyState =====
+
+
+===== setData (start) =====
+
+> src\tableRenderer.ts:371:    public setData(
+  src\tableRenderer.ts:372:        rowColumns: ITableColumn[],
+  src\tableRenderer.ts:373:        groupColumns: ITableColumn[],
+  src\tableRenderer.ts:374:        valueColumns: ITableColumn[],
+  src\tableRenderer.ts:375:        tooltipColumns: ITableColumn[],
+  src\tableRenderer.ts:376:        data: ITableRow[],
+  src\tableRenderer.ts:377:        settings: ITableRendererSettings,
+  src\tableRenderer.ts:378:        persistedStateJson?: string,
+  src\tableRenderer.ts:379:        reportTitle?: string
+  src\tableRenderer.ts:380:    ): void {
+  src\tableRenderer.ts:381:        this.rowColumns = rowColumns;
+  src\tableRenderer.ts:382:        this.groupColumns = groupColumns;
+  src\tableRenderer.ts:383:        this.valueColumns = valueColumns;
+  src\tableRenderer.ts:384:        this.tooltipColumns = tooltipColumns;
+  src\tableRenderer.ts:385:        this._data = data;
+  src\tableRenderer.ts:386:        this.settings = settings;
+  src\tableRenderer.ts:387:        this._persistedViewState = settings.savedViewState;
+  src\tableRenderer.ts:388:        this.defaultRowHeight = settings.virtualScrollEnabled ? settings.virtualScrollRowHeight : 
+settings.rowHeight;
+  src\tableRenderer.ts:389:        if (reportTitle) {
+  src\tableRenderer.ts:390:            this.reportTitle = reportTitle;
+  src\tableRenderer.ts:391:        }
+  src\tableRenderer.ts:392:
+  src\tableRenderer.ts:393:        // Calculations/combined columns/sparklines/drag-pivot are saved onto the report so a
+  src\tableRenderer.ts:394:        // page refresh or reload never silently discards a user's calculated columns (Items 1 & 4
+  src\tableRenderer.ts:395:        // explicitly must not be lost). Hydrate exactly once — subsequent updates keep the live,
+  src\tableRenderer.ts:396:        // in-memory state so an in-flight persistProperties() write can't be raced by a redraw.
+  src\tableRenderer.ts:397:        if (!this._hydratedFromPersist) {
+  src\tableRenderer.ts:398:            if (persistedStateJson) {
+  src\tableRenderer.ts:399:                this.hydrateUserConfig(persistedStateJson);
+  src\tableRenderer.ts:400:            }
+  src\tableRenderer.ts:401:            this._hydratedFromPersist = true;
+  src\tableRenderer.ts:402:        }
+  src\tableRenderer.ts:403:
+  src\tableRenderer.ts:404:        // Rebuilds this.columns (rows + values + calculated + combined) and materializes
+  src\tableRenderer.ts:405:        // calculated/combined values into each row before anything downstream reads them.
+  src\tableRenderer.ts:406:        this.recomputeVirtualColumns();
+  src\tableRenderer.ts:407:
+  src\tableRenderer.ts:408:        if (this._pendingDragGroupName) {
+  src\tableRenderer.ts:409:            const restored = this.rowColumns.find((c) => c.name === this._pendingDragGroupName);
+  src\tableRenderer.ts:410:            if (restored) {
+  src\tableRenderer.ts:411:                this._dragGroupColumn = restored;
+
+
+
+
+===== clearElement usage =====
+
+  src\tableRenderer.ts:290:     */
+> src\tableRenderer.ts:291:    private clearElement(el: HTMLElement): void {
+  src\tableRenderer.ts:292:        while (el.firstChild) {
+  src\tableRenderer.ts:298:    private buildSkeleton(): void {
+> src\tableRenderer.ts:299:        this.clearElement(this.container);
+  src\tableRenderer.ts:300:
+  src\tableRenderer.ts:634:    private renderGroupByChip(): void {
+> src\tableRenderer.ts:635:        this.clearElement(this.pivotChipRoot);
+  src\tableRenderer.ts:636:        if (!this._dragGroupColumn) {
+  src\tableRenderer.ts:710:    private renderToolbar(): void {
+> src\tableRenderer.ts:711:        this.clearElement(this.toolbarRoot);
+  src\tableRenderer.ts:712:        this.toolbarRoot.style.display = this.settings.showToolbar ? "" : "none";
+  src\tableRenderer.ts:1211:    private renderSearchBar(): void {
+> src\tableRenderer.ts:1212:        this.clearElement(this.searchRoot);
+  src\tableRenderer.ts:1213:        this.searchRoot.style.display = this.settings.searchEnabled ? "" : "none";
+  src\tableRenderer.ts:1411:    private renderFilterChips(): void {
+> src\tableRenderer.ts:1412:        this.clearElement(this.filterChipsRoot);
+  src\tableRenderer.ts:1413:        if (this._columnFilters.size === 0) {
+  src\tableRenderer.ts:1469:    private renderHeader(): void {
+> src\tableRenderer.ts:1470:        this.clearElement(this.headerRoot);
+  src\tableRenderer.ts:1471:        const row = document.createElement("div");
+  src\tableRenderer.ts:2024:        if (totalRows === 0) {
+> src\tableRenderer.ts:2025:            this.clearElement(this.bodyRoot);
+  src\tableRenderer.ts:2026:            const empty = document.createElement("div");
+  src\tableRenderer.ts:2051:
+> src\tableRenderer.ts:2052:        this.clearElement(this.bodyRoot);
+  src\tableRenderer.ts:2053:        this.bodyRoot.style.position = "relative";
+  src\tableRenderer.ts:2795:    public renderEmptyState(): void {
+> src\tableRenderer.ts:2796:        this.clearElement(this.container);
+  src\tableRenderer.ts:2797:        const wrap = document.createElement("div");
+  src\tableRenderer.ts:2824:    public renderLandingPage(): void {
+> src\tableRenderer.ts:2825:        this.clearElement(this.container);
+  src\tableRenderer.ts:2826:        const wrap = document.createElement("div");
+
+

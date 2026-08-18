@@ -31,6 +31,8 @@ import {
     LinkActionOperator
 } from "./tableRenderer";
 
+import { parseSavedViewState } from "./savedViewState";
+
 export class SkibaTables implements IVisual {
     private host: IVisualHost;
     private selectionManager: ISelectionManager;
@@ -48,6 +50,19 @@ export class SkibaTables implements IVisual {
 
     /** Item 7: guards against re-applying the saved default view on every update() -- it should only happen once, when the report is freshly opened. */
     private hasAppliedSavedView = false;
+
+    /** True once this visual has successfully rendered real table data at least once. Prevents
+     *  a later transient/empty update (e.g. a trailing segment-reconciliation call that can occur
+     *  with large windowed/segmented queries) from wiping a working table back to the landing page. */
+    private hasRenderedRealData = false;
+
+    /** Fetch More Data (D1/A1-A4): the highest row count we've successfully rendered so far.
+     *  Used only to detect a transient/reconciliation update that reports *fewer* rows than
+     *  we already have while our own fetch-more request is still in flight -- see the guard
+     *  in updateInternal(). This is the same class of problem hasRenderedRealData already
+     *  guards against above (a trailing call from Power BI's segment reconciliation), just
+     *  applied to "row count regressed" instead of "row count went to zero". */
+    private lastRenderedRowCount = 0;
 
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
@@ -122,6 +137,14 @@ export class SkibaTables implements IVisual {
         const dataViews = options.dataViews;
         const dataView: DataView | undefined = dataViews && dataViews[0];
 
+        // Fetch More Data (A1-A4): captured *before* anything below can touch
+        // TableRenderer's internal fetch-in-flight flag, so this accurately reflects
+        // whether this update() cycle is the response to a fetchMoreData() request this
+        // visual issued itself (a "segment continuation") versus a genuinely new query
+        // (fields/filters/page changed). TableRenderer.setData() resets that flag as
+        // part of handling this same cycle, so it must be read now, not later.
+        const isSegmentContinuation = this.hasRenderedRealData && this.tableRenderer.isAwaitingMoreData();
+
         this.resizeViewport(options.viewport.width, options.viewport.height);
 
         this.settingsModel = this.formattingSettingsService.populateFormattingSettingsModel(
@@ -139,11 +162,36 @@ export class SkibaTables implements IVisual {
         const hasAnyFieldsAssigned = !!(dataView && dataView.metadata && dataView.metadata.columns && dataView.metadata.columns.length > 0);
 
         if (!hasAnyFieldsAssigned) {
-            this.tableRenderer.renderLandingPage();
+            if (!this.hasRenderedRealData) {
+                this.tableRenderer.renderLandingPage();
+            }
             return;
         }
 
         const table: DataViewTable | undefined = dataView && dataView.table;
+
+        // Fetch More Data correctness (A1-A4): Power BI's fetchMoreData contract delivers the
+        // *cumulative* row window on every subsequent update() (previously loaded rows plus
+        // the new segment appended), so table.rows.length should only ever grow while more
+        // segments remain pending -- it should never be smaller than what we already rendered
+        // for the same query. A trailing reconciliation update (the same class of transient
+        // call hasRenderedRealData already guards against just above) can occasionally arrive
+        // with a smaller row count for what is otherwise the same query. There's no cheap,
+        // documented "query identity" signal on VisualUpdateOptions to tell that case apart
+        // from a genuine new query with fewer matching rows, so this treats "fewer rows than
+        // we've already rendered, arriving while our own fetch-more request is still in
+        // flight" as the reconciliation case and keeps the existing accumulated table rather
+        // than regress it. A genuine new query (a filter/field change) is not something we
+        // triggered via fetchMoreData, so isSegmentContinuation will be false for it and this
+        // guard will not apply.
+        if (
+            isSegmentContinuation &&
+            table &&
+            table.rows &&
+            table.rows.length < this.lastRenderedRowCount
+        ) {
+            return;
+        }
 
         if (!table || !table.rows || table.rows.length === 0 || !table.columns || table.columns.length === 0) {
             this.tableRenderer.renderEmptyState();
@@ -164,7 +212,7 @@ export class SkibaTables implements IVisual {
         const persistedState = dataView?.metadata?.objects?.["userConfig"]?.["state"] as string | undefined;
 
         const permission = this.resolvePermission(table, permissionsColumnIndex);
-        const savedViewState = this.parseSavedViewState(dataView);
+        const savedViewState = this.resolveSavedViewState(dataView);
         const linkActionRules = this.parseAndValidateLinkActionRules(this.settingsModel.linkActions.rules.value);
 
         // Item 9: never let a malformed rules value crash the render -- just disable
@@ -172,9 +220,33 @@ export class SkibaTables implements IVisual {
         const rulesTextIsPresent = (this.settingsModel.linkActions.rules.value || "").trim().length > 0;
         this.settingsModel.linkActions.validationMessage.visible = rulesTextIsPresent && linkActionRules === null;
 
-        const rendererSettings = this.buildRendererSettings(dataView as DataView, permission, savedViewState, linkActionRules ?? []);
+        // Fetch More Data (A1-A4): whether Power BI still has more rows beyond what's in this
+        // dataView. `metadata.segment` is the documented signal Power BI sets while a windowed/
+        // paginated query still has data left to fetch, and clears once the full result set has
+        // been delivered. The inline cast is defensive: it reads the real runtime property
+        // without depending on the installed @types/powerbi-visuals-api version definitely
+        // typing `segment` on DataViewMetadata -- if it IS typed there already, this cast is
+        // harmless and redundant. D2: this "more data available" flag, like the permission
+        // check below, is ordinary query metadata Power BI provides -- not a tamper-proof
+        // signal; see the longer client-trust-not-DRM note next to isExportRestricted() in
+        // tableRenderer.ts, which is the actual enforcement point for D1's gating decision.
+        const hasMoreData = !!(dataView && dataView.metadata && (dataView.metadata as powerbi.DataViewMetadata & { segment?: unknown }).segment);
 
-        this.tableRenderer.setData(rowColumns, groupColumns, valueColumns, tooltipColumns, rows, rendererSettings, persistedState, "Skiba Tables");
+        const rendererSettings = this.buildRendererSettings(dataView as DataView, permission, savedViewState, linkActionRules ?? [], hasMoreData);
+
+        this.tableRenderer.setData(
+            rowColumns,
+            groupColumns,
+            valueColumns,
+            tooltipColumns,
+            rows,
+            rendererSettings,
+            persistedState,
+            "Skiba Tables",
+            isSegmentContinuation
+        );
+        this.hasRenderedRealData = true;
+        this.lastRenderedRowCount = table.rows.length;
 
         // Item 7: restore the report's saved default view exactly once, on the
         // first update() after this visual is constructed -- never on subsequent
@@ -266,6 +338,9 @@ export class SkibaTables implements IVisual {
      * every row for a given viewer -- reading the first row is sufficient. Returns
      * null when the role is left unbound entirely, in which case every caller of
      * this value must treat null as "full functionality, no restriction."
+     *
+     * D1: this same resolved value is what gates Fetch More Data (in addition to
+     * export) -- see isExportRestricted() in tableRenderer.ts.
      */
     private resolvePermission(table: DataViewTable, permissionsColumnIndex: number | null): string | null {
         if (permissionsColumnIndex === null || !table.rows || table.rows.length === 0) {
@@ -276,17 +351,13 @@ export class SkibaTables implements IVisual {
     }
 
     /** Item 7: reads back the persisted "report's default view" from the report's own object model, if one has been saved. */
-    private parseSavedViewState(dataView: DataView | undefined): ISavedViewState | null {
+    private resolveSavedViewState(dataView: DataView | undefined): ISavedViewState | null {
         const objects = dataView && dataView.metadata && dataView.metadata.objects;
         const raw = objects && objects["savedView"] && (objects["savedView"] as { [k: string]: unknown })["state"];
-        if (typeof raw !== "string" || raw.trim().length === 0) {
+        if (typeof raw !== "string") {
             return null;
         }
-        try {
-            return JSON.parse(raw) as ISavedViewState;
-        } catch {
-            return null;
-        }
+        return parseSavedViewState(raw);
     }
 
     /**
@@ -393,12 +464,13 @@ export class SkibaTables implements IVisual {
         return isExplicitlySet ? userValue : themeColor;
     }
 
-    /** Maps the formatting settings model (plus this update's resolved permission/saved-view/link-action state and theme) into the plain settings bag the renderer consumes. */
+    /** Maps the formatting settings model (plus this update's resolved permission/saved-view/link-action/fetch-more state and theme) into the plain settings bag the renderer consumes. */
     private buildRendererSettings(
         dataView: DataView,
         permission: string | null,
         savedViewState: ISavedViewState | null,
-        linkActionRules: ILinkActionRule[]
+        linkActionRules: ILinkActionRule[],
+        hasMoreData: boolean
     ): ITableRendererSettings {
         const s = this.settingsModel;
         const palette = this.colorPalette;
@@ -452,7 +524,8 @@ export class SkibaTables implements IVisual {
             linkActionRules,
             linkActionIconColumn: s.linkActions.iconColumn.value,
             savedViewState,
-            allowInteractions: this.allowInteractions()
+            allowInteractions: this.allowInteractions(),
+            hasMoreData
         };
     }
 
