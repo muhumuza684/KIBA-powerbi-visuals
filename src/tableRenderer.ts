@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 import * as d3 from "d3";
 import * as XLSX from "xlsx";
@@ -29,9 +29,9 @@ export interface ITableColumn {
     displayName: string;
     isMeasure: boolean;
     isGroupBy: boolean;
-    /** True for a user-defined "Calculations" column (Item 1) Ã¢â‚¬â€ behaves like any other measure column. */
+    /** True for a user-defined "Calculations" column (Item 1) — behaves like any other measure column. */
     isCalculated?: boolean;
-    /** True for a user-defined "Combine columns" column (Item 4) Ã¢â‚¬â€ behaves like a text row column. */
+    /** True for a user-defined "Combine columns" column (Item 4) — behaves like a text row column. */
     isCombined?: boolean;
 }
 
@@ -147,7 +147,7 @@ type RenderNode =
     | { kind: "detail"; depth: number; row: ITableRow };
 
 const ROW_BUFFER = 6; // extra rows rendered above/below viewport to avoid flicker while scrolling
-const GROUP_SEP = "\u241F"; // unit separator Ã¢â‚¬â€ safe delimiter for building unique group path keys
+const GROUP_SEP = "\u241F"; // unit separator — safe delimiter for building unique group path keys
 
 /**
  * TableRenderer owns everything that happens inside the scrollable table
@@ -206,11 +206,11 @@ export class TableRenderer {
     // Tracks which virtual (calculated/combined) column names are currently materialized into row.values,
     // so they can be cleanly removed/recomputed without leaking stale keys.
     private _virtualColumnNames: Set<string> = new Set();
-    // Item 3: sparklines Ã¢â‚¬â€ set of measure column names with the trend indicator turned on
+    // Item 3: sparklines — set of measure column names with the trend indicator turned on
     private _sparklineColumns: Set<string> = new Set();
-    // Item 2: drag-to-pivot Ã¢â‚¬â€ the single row column currently promoted to a group-by, if any
+    // Item 2: drag-to-pivot — the single row column currently promoted to a group-by, if any
     private _dragGroupColumn: ITableColumn | null = null;
-    // Item 5: true drill-down Ã¢â‚¬â€ leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
+    // Item 5: true drill-down — leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
     private _expandedDetailRows: Set<string> = new Set();
     // Per-node pixel offsets into the virtualized body, aligned with _renderNodes; recomputed whenever
     // the node list changes, since detail nodes have a variable height unlike the uniform-height rows/groups.
@@ -332,7 +332,7 @@ export class TableRenderer {
         this.container.appendChild(this.rowCountRoot);
 
         // Item 2: drag-to-pivot drop target. Invisible until a column header drag starts
-        // (progressive disclosure) Ã¢â‚¬â€ see renderHeader()'s dragstart/dragend handlers.
+        // (progressive disclosure) — see renderHeader()'s dragstart/dragend handlers.
         this.pivotDropRoot = document.createElement("div");
         this.pivotDropRoot.className = "skiba-pivot-drop";
         this.pivotDropRoot.textContent = "Drop here to group by this column";
@@ -449,7 +449,7 @@ export class TableRenderer {
 
         // Calculations/combined columns/sparklines/drag-pivot are saved onto the report so a
         // page refresh or reload never silently discards a user's calculated columns (Items 1 & 4
-        // explicitly must not be lost). Hydrate exactly once Ã¢â‚¬â€ subsequent updates keep the live,
+        // explicitly must not be lost). Hydrate exactly once — subsequent updates keep the live,
         // in-memory state so an in-flight persistProperties() write can't be raced by a redraw.
         if (!this._hydratedFromPersist) {
             if (persistedStateJson) {
@@ -789,7 +789,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Persistence Ã¢â‚¬â€ saves calc/combined columns, sparkline toggles, and the
+    // Persistence — saves calc/combined columns, sparkline toggles, and the
     // drag-to-pivot column onto the report so user work is never silently lost.
     // -----------------------------------------------------------------
 
@@ -847,7 +847,7 @@ export class TableRenderer {
                 this._pendingDragGroupName = state.dragGroup;
             }
         } catch {
-            // Corrupt or pre-upgrade persisted state Ã¢â‚¬â€ start clean rather than crashing the visual.
+            // Corrupt or pre-upgrade persisted state — start clean rather than crashing the visual.
         }
     }
 
@@ -956,7 +956,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Toolbar (minimal floating menu Ã¢â‚¬â€ progressive disclosure)
+    // Toolbar (minimal floating menu — progressive disclosure)
     // -----------------------------------------------------------------
 
     private renderToolbar(): void {
@@ -1047,7 +1047,7 @@ export class TableRenderer {
             label.appendChild(document.createTextNode(col.displayName));
             rowWrap.appendChild(label);
 
-            // Item 3: sparklines Ã¢â‚¬â€ genuinely optional per numeric column, never forced on.
+            // Item 3: sparklines — genuinely optional per numeric column, never forced on.
             if (col.isMeasure) {
                 const sparkLabel = document.createElement("label");
                 sparkLabel.className = "skiba-toolbar__checkbox skiba-toolbar__checkbox--sparkline";
@@ -1108,7 +1108,7 @@ export class TableRenderer {
             menu.appendChild(this.makeDivider());
         }
 
-        // Reset sorts / filters Ã¢â‚¬â€ harmless, no confirmation needed
+        // Reset sorts / filters — harmless, no confirmation needed
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetSorts", "Reset sorts"), () => {
             this.resetSorts();
             closeMenu();
@@ -1119,7 +1119,7 @@ export class TableRenderer {
             closeMenu();
         }));
 
-        // Reset column widths / order Ã¢â‚¬â€ discards user customization, so confirm first
+        // Reset column widths / order — discards user customization, so confirm first
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetColumnWidths", "Reset column widths"), () => {
             if (this._columnWidths.size === 0) {
                 this.resetColumnWidths();
@@ -1158,7 +1158,7 @@ export class TableRenderer {
     }
 
     /**
-     * "Save current view as default" Ã¢â‚¬â€ a normal button unless a default view
+     * "Save current view as default" — a normal button unless a default view
      * already exists, in which case a click swaps the button for a brief inline
      * confirmation (not a browser confirm() dialog) before overwriting it, since
      * doing so affects every other viewer of this shared report.
@@ -1179,7 +1179,7 @@ export class TableRenderer {
 
             const msg = document.createElement("div");
             msg.className = "skiba-toolbar__confirm-msg";
-            msg.textContent = "This replaces the current default view for everyone who opens this report Ã¢â‚¬â€ save?";
+            msg.textContent = "This replaces the current default view for everyone who opens this report — save?";
             confirmBox.appendChild(msg);
 
             const actions = document.createElement("div");
@@ -1211,7 +1211,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Item 1: "Calculations" toolbar section Ã¢â‚¬â€ add a calculated column
+    // Item 1: "Calculations" toolbar section — add a calculated column
     // -----------------------------------------------------------------
 
     private renderCalculationsSection(menu: HTMLDivElement, closeMenu: () => void): void {
@@ -1429,7 +1429,7 @@ export class TableRenderer {
         del.setAttribute("aria-label", `Remove ${name}`);
         del.addEventListener("click", (evt) => {
             evt.stopPropagation();
-            // Destructive (discards a saved calculation) Ã¢â‚¬â€ confirm before applying, per the design charter.
+            // Destructive (discards a saved calculation) — confirm before applying, per the design charter.
             if (window.confirm(confirmMessage)) {
                 onDelete();
             }
@@ -1734,7 +1734,15 @@ export class TableRenderer {
         const changed = isNarrow !== this._isNarrow || (isNarrow && availableWidth !== this._narrowAvailableWidth);
         this._isNarrow = isNarrow;
         this._narrowAvailableWidth = availableWidth;
-        if (changed && this.settings) {
+        // Bugfix (item 34 loop): resizeViewport() -> setNarrowLayout() runs at the TOP of
+        // updateInternal(), before this cycle's data has been parsed and handed to
+        // setData(). Without this guard, a narrow-state flip on the very first render (or
+        // any render where width crosses the breakpoint) forces an immediate re-render
+        // against stale/empty `_renderNodes` from the previous cycle -- which can itself
+        // trigger another host update(), producing an infinite update/resize loop. Only
+        // re-render here if there's actually data to render; the real table render later
+        // in this same updateInternal() cycle will pick up the new narrow state anyway.
+        if (changed && this.settings && this._renderNodes && this._renderNodes.length > 0) {
             this.renderHeader();
             this.renderVisibleRows();
         }
@@ -2402,7 +2410,7 @@ export class TableRenderer {
         head.appendChild(label);
         rowEl.appendChild(head);
 
-        // Item 5: the group row is the disclosure control for its detail sub-grid Ã¢â‚¬â€ keyboard
+        // Item 5: the group row is the disclosure control for its detail sub-grid — keyboard
         // accessible and ARIA-labelled, matching the pattern already used by header sort buttons.
         // Full Keyboard Navigation (item 14): group rows toggle expand/collapse via Enter/Space,
         // like the header sort cells and data rows below. Local UI state (not a cross-filter
@@ -2667,7 +2675,7 @@ export class TableRenderer {
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("width", String(w));
         svg.setAttribute("height", String(h));
-        svg.setAttribute("aria-hidden", "true"); // decorative Ã¢â‚¬â€ the exact value is already in the cell text
+        svg.setAttribute("aria-hidden", "true"); // decorative — the exact value is already in the cell text
         svg.setAttribute("focusable", "false");
 
         const polyline = document.createElementNS(svgNS, "polyline");
@@ -2717,7 +2725,7 @@ export class TableRenderer {
 
         const linkBtn = document.createElement("button");
         linkBtn.className = "skiba-link-icon";
-        linkBtn.textContent = "\u2197"; // Ã¢â€ â€” Ã¢â‚¬â€ reuses the same plain Unicode-glyph icon pattern as the gear/chevron/sort-arrow icons elsewhere in this file, no new icon font/library
+        linkBtn.textContent = "\u2197"; // ↗ — reuses the same plain Unicode-glyph icon pattern as the gear/chevron/sort-arrow icons elsewhere in this file, no new icon font/library
         linkBtn.setAttribute("aria-label", "Open linked page");
         linkBtn.title = "Open linked page";
         linkBtn.addEventListener("click", (evt) => {
@@ -2754,7 +2762,7 @@ export class TableRenderer {
             return String(raw).toLowerCase().indexOf(rule.value.toLowerCase()) !== -1;
         }
 
-        // gt / gte / lt / lte Ã¢â‚¬â€ numeric comparison
+        // gt / gte / lt / lte — numeric comparison
         const numRaw = typeof raw === "number" ? raw : parseFloat(String(raw));
         const numRule = parseFloat(rule.value);
         if (isNaN(numRaw) || isNaN(numRule)) {
@@ -2836,7 +2844,7 @@ export class TableRenderer {
     }
 
     // -----------------------------------------------------------------
-    // Smart tooltips (mean / deviation) Ã¢â‚¬â€ insight without extra UI
+    // Smart tooltips (mean / deviation) — insight without extra UI
     // -----------------------------------------------------------------
 
     private computeColumnStats(): void {
@@ -2946,7 +2954,7 @@ export class TableRenderer {
         this.downloadBlob(blob, "skiba-tables-export.csv");
     }
 
-    /** Real .xlsx export via SheetJS Ã¢â‚¬â€ requires `npm install xlsx --save` in the project. */
+    /** Real .xlsx export via SheetJS — requires `npm install xlsx --save` in the project. */
     private exportExcel(): void {
         const visibleColumns = this.visibleColumns();
         const header = visibleColumns.map((c) => c.displayName);
@@ -2972,7 +2980,7 @@ export class TableRenderer {
 
     /**
      * Dedicated multi-page PDF export via jsPDF + jspdf-autotable. Replaces the old
-     * window.print()-based path entirely Ã¢â‚¬â€ one clear "Export PDF" behavior. Exports exactly
+     * window.print()-based path entirely — one clear "Export PDF" behavior. Exports exactly
      * what's on screen: current search/sort/column-filter/grouping state, not the raw data.
      */
     private exportPDF(): void {
