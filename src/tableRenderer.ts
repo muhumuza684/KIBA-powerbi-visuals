@@ -190,6 +190,7 @@ export class TableRenderer {
     // Fetch More Data (D1/D2/A1-A4) -----------------------------------------------------
     private _isFetchingMore = false;
     private _hasMoreData = false;
+    private _fetchMoreFailed = false;
     private _forceFetchAllReason: "search" | "export-csv" | "export-excel" | "export-pdf" | null = null;
     private _scrollListenerAttached = false;
 
@@ -224,6 +225,7 @@ export class TableRenderer {
     private bodyRoot!: HTMLDivElement;
     private toolbarRoot!: HTMLDivElement;
     private searchRoot!: HTMLDivElement;
+    private rowCountRoot!: HTMLDivElement;
     private pivotChipRoot!: HTMLDivElement;
     private pivotDropRoot!: HTMLDivElement;
     private filterChipsRoot!: HTMLDivElement;
@@ -314,6 +316,15 @@ export class TableRenderer {
         this.searchRoot = document.createElement("div");
         this.searchRoot.className = "skiba-search";
         this.container.appendChild(this.searchRoot);
+
+        // Item 23: honest row-count display. Deliberately separate from the search/filter
+        // match line inside searchRoot (renderStatusLine()), since this must stay visible
+        // even when no search term or column filter is active.
+        this.rowCountRoot = document.createElement("div");
+        this.rowCountRoot.className = "skiba-row-count";
+        this.rowCountRoot.setAttribute("role", "status");
+        this.rowCountRoot.setAttribute("aria-live", "polite");
+        this.container.appendChild(this.rowCountRoot);
 
         // Item 2: drag-to-pivot drop target. Invisible until a column header drag starts
         // (progressive disclosure) â€” see renderHeader()'s dragstart/dragend handlers.
@@ -408,6 +419,8 @@ export class TableRenderer {
 
         this._isFetchingMore = false;
         this._hasMoreData = settings.hasMoreData;
+        this._fetchMoreFailed = false;
+        this.renderRowCountStatus();
         this.renderLoadingMoreIndicator();
 
         if (this._forceFetchAllReason) {
@@ -501,6 +514,8 @@ export class TableRenderer {
         if (typeof this.host.fetchMoreData !== "function") {
             return;
         }
+        this._fetchMoreFailed = false;
+        this.renderFetchMoreFailedIndicator();
         // Explicit `true` (matches the API default) rather than relying on the implicit
         // default, since the whole segment-accumulation design in setData() above depends on
         // Power BI delivering the cumulative merged row set on each continuation, not a raw
@@ -509,11 +524,19 @@ export class TableRenderer {
         if (accepted) {
             this._isFetchingMore = true;
             this.renderLoadingMoreIndicator();
+        } else {
+            // host.fetchMoreData() is synchronous and returns a boolean (verified against the
+            // real powerbi-visuals-api .d.ts) -- there is no Promise/rejection path. `false` IS
+            // the failure signal (e.g. the host rejected the request), so it's handled inline.
+            this._fetchMoreFailed = true;
+            this.renderFetchMoreFailedIndicator();
         }
     }
 
     private renderLoadingMoreIndicator(): void {
         this.container.querySelectorAll(".skiba-fetch-more-indicator").forEach((el) => el.remove());
+        // A fresh loading attempt (including a retry) supersedes any previously shown failure.
+        this.container.querySelectorAll(".skiba-fetch-more-failed").forEach((el) => el.remove());
         if (!this._isFetchingMore || this._forceFetchAllReason) {
             return;
         }
@@ -523,6 +546,79 @@ export class TableRenderer {
         indicator.setAttribute("aria-live", "polite");
         indicator.textContent = this.loc("FetchMore_Loading", "Loading more rows\u2026");
         this.container.appendChild(indicator);
+    }
+
+    /**
+     * Item 24: explicit retry control for a failed Fetch More Data request. Uses the exact
+     * same DOM-creation pattern as renderLoadingMoreIndicator() above -- elements built via
+     * document.createElement only, never innerHTML (flagged by the Power BI linter
+     * no-inner-outer-html even for an empty-string assignment; see clearElement()) -- and the
+     * same keyboard-accessibility pattern used elsewhere in this file (tabIndex + role="button"
+     * + Enter/Space activation alongside the native click handler, matching the pivot chip in
+     * renderGroupByChip() and the group-row disclosure control in renderGroupRow()).
+     */
+    private renderFetchMoreFailedIndicator(): void {
+        this.container.querySelectorAll(".skiba-fetch-more-failed").forEach((el) => el.remove());
+        if (!this._fetchMoreFailed || this._forceFetchAllReason) {
+            return;
+        }
+
+        const wrap = document.createElement("div");
+        wrap.className = "skiba-fetch-more-failed";
+        wrap.setAttribute("role", "status");
+        wrap.setAttribute("aria-live", "assertive");
+
+        const message = document.createElement("span");
+        message.textContent = this.loc("Skiba_Visual_FetchMore_Failed", "Couldn't load more rows \u2014");
+        wrap.appendChild(message);
+
+        const retryBtn = document.createElement("span");
+        retryBtn.className = "skiba-fetch-more-failed__retry";
+        const retryLabel = this.loc("Skiba_Visual_FetchMore_Retry", "Retry");
+        retryBtn.textContent = retryLabel;
+        retryBtn.setAttribute("role", "button");
+        retryBtn.tabIndex = 0;
+        retryBtn.setAttribute("aria-label", retryLabel);
+
+        const retry = (): void => {
+            this.requestMoreData();
+        };
+        retryBtn.addEventListener("click", retry);
+        retryBtn.addEventListener("keydown", (evt: KeyboardEvent) => {
+            if (evt.key === "Enter" || evt.key === " ") {
+                evt.preventDefault();
+                retry();
+            }
+        });
+
+        wrap.appendChild(document.createTextNode(" "));
+        wrap.appendChild(retryBtn);
+        this.container.appendChild(wrap);
+    }
+
+    /**
+     * Item 23: honest row-count display, independent of the search/filter match line in
+     * renderStatusLine(). Power BI's Fetch More Data segmentation only ever tells this visual
+     * "at least one more segment exists" -- it never provides a true total row count -- so a
+     * partial state can only honestly say "{0}+ rows loaded, more available"
+     * (Skiba_Visual_RowCount_PartialUnknownTotal), not "{0} of {1}+ loaded"
+     * (Skiba_Visual_RowCount_Partial), which would require a second, genuinely-known total this
+     * visual does not have. Skiba_Visual_RowCount_Partial is deliberately left unused rather
+     * than fed a fabricated second number -- flag this for review if a real total becomes
+     * available from elsewhere (e.g. a DAX total-rows measure bound to a new data role).
+     */
+    private renderRowCountStatus(): void {
+        this.clearElement(this.rowCountRoot);
+        if (!this.settings) {
+            return;
+        }
+        const count = this._data.length;
+        const text = document.createElement("span");
+        text.className = "skiba-row-count__text";
+        text.textContent = this._hasMoreData
+            ? this.loc("Skiba_Visual_RowCount_PartialUnknownTotal", "{0}+ rows loaded, more available", String(count))
+            : this.loc("Skiba_Visual_RowCount_Complete", "{0} rows", String(count));
+        this.rowCountRoot.appendChild(text);
     }
 
     private beginForceFetchAll(reason: "search" | "export-csv" | "export-excel" | "export-pdf"): void {
