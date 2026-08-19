@@ -33,6 +33,7 @@ import {
 
 import { parseSavedViewState } from "./savedViewState";
 import { resolveTierRestrictions, ITierRestrictions } from "./tierGating";
+import { isNarrowViewport } from "./mobileLayout";
 
 export class SkibaTables implements IVisual {
     private host: IVisualHost;
@@ -550,6 +551,23 @@ export class SkibaTables implements IVisual {
     private resizeViewport(width: number, height: number): void {
         this.tableContainer.style.width = `${width}px`;
         this.tableContainer.style.height = `${height}px`;
+
+        // Item 34 (Module D): the container's pixel size is driven directly by Power
+        // BI's options.viewport, not the surrounding browser/webview window (see
+        // updateInternal's call order -- resizeViewport runs first, before anything else),
+        // so a CSS @media query can't reliably detect "this tile is phone-narrow." Toggle
+        // a class from JS instead and let CSS react to the class.
+        const narrow = isNarrowViewport(width);
+        this.rootElement.classList.toggle("skiba-tables-visual--narrow", narrow);
+        if (narrow) {
+            // Item 2: keep the toolbar dropdown from rendering wider than the canvas.
+            // Computed in pixels here (not via CSS %) because the menu's actual CSS
+            // containing block is the small toolbar button, not the canvas -- a
+            // percentage width on the menu wouldn't resolve against anything useful.
+            const menuMaxWidth = Math.max(160, width - 16);
+            this.rootElement.style.setProperty("--skiba-narrow-menu-max-width", `${menuMaxWidth}px`);
+        }
+        this.tableRenderer.setNarrowLayout(narrow, width);
     }
 
     /** Required by IVisual: surfaces the formatting model to the Power BI formatting pane. */

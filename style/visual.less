@@ -749,3 +749,52 @@
 .skiba-sparkline__dot {
     fill: var(--skiba-bar-color, #0078d4);
 }
+
+// -----------------------------------------------------------------
+// Module D (Item 34): mobile / narrow-canvas support.
+//
+// Driven by the `.skiba-tables-visual--narrow` class toggled from JS in
+// visual.ts's resizeViewport(), NOT a @media query â€” see the comment there for
+// why: the container's pixel size comes from Power BI's options.viewport via
+// inline styles, which isn't guaranteed to track the browser/webview window
+// that @media actually measures.
+// -----------------------------------------------------------------
+
+.skiba-tables-visual--narrow {
+    .skiba-hamburger {
+        // WCAG 2.5.5 / platform HIG minimum touch target (44x44 CSS px), up from the
+        // 30x30 desktop/mouse-precision size.
+        width: 44px;
+        height: 44px;
+        font-size: 16px;
+    }
+
+    .skiba-toolbar {
+        top: 6px;
+        right: 6px;
+    }
+
+    .skiba-toolbar__menu {
+        // Replace the fixed 200px min-width (which can overflow a ~320-340px canvas)
+        // with a cap computed from the real viewport width in visual.ts.
+        min-width: 0;
+        width: max-content;
+        max-width: var(--skiba-narrow-menu-max-width, 280px);
+    }
+
+    // The 5px resize-handle hit target is fine for a mouse but too thin to reliably
+    // grab with a finger. Widen the invisible hit area without moving or thickening
+    // the visible line itself.
+    .skiba-resizer {
+        width: 16px;
+        right: -6px;
+    }
+
+    .skiba-fetch-more-indicator,
+    .skiba-force-fetch-progress {
+        max-width: calc(100% - 16px);
+        font-size: 11px;
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+}
