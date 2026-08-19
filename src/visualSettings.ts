@@ -294,6 +294,16 @@ class ConditionalFormattingSettingsCard extends FormattingSettingsCard {
  * malformed input never throws or breaks rendering, it just quietly disables the
  * link-action feature and surfaces this one plain-language note in the pane.
  */
+class ExportGovernanceSettingsCard extends FormattingSettingsCard {
+    enabled = new formattingSettings.ToggleSwitch({ name: "enabled", displayName: "Enable export watermark", value: false });
+    watermarkText = new formattingSettings.TextInput({ name: "watermarkText", displayName: "Watermark text", placeholder: "CONFIDENTIAL", value: "CONFIDENTIAL" });
+    locale = new formattingSettings.TextInput({ name: "locale", displayName: "Locale", placeholder: "en-UG", value: "en-UG" });
+    currency = new formattingSettings.TextInput({ name: "currency", displayName: "Currency code", placeholder: "UGX", value: "UGX" });
+    username = new formattingSettings.TextInput({ name: "username", displayName: "Audit username", placeholder: "Power BI username", value: "" });
+    name: string = "exportGovernance";
+    displayName: string = "Export governance";
+    slices: FormattingSettingsSlice[] = [this.enabled, this.watermarkText, this.locale, this.currency, this.username];
+}
 class LinkActionsSettingsCard extends FormattingSettingsCard {
     rules = new formattingSettings.TextArea({
         name: "rules",
@@ -337,6 +347,7 @@ export class VisualSettingsModel extends FormattingSettingsModel {
     grouping = new GroupingSettingsCard();
     filters = new FiltersSettingsCard();
     conditionalFormatting = new ConditionalFormattingSettingsCard();
+    exportGovernance = new ExportGovernanceSettingsCard();
     linkActions = new LinkActionsSettingsCard();
 
     cards: FormattingSettingsCard[] = [
@@ -351,6 +362,7 @@ export class VisualSettingsModel extends FormattingSettingsModel {
         this.grouping,
         this.filters,
         this.conditionalFormatting,
+        this.exportGovernance,
         this.linkActions
     ];
 }

@@ -33,7 +33,8 @@ import {
 
 import { parseSavedViewState } from "./savedViewState";
 import { resolveTierRestrictions, ITierRestrictions } from "./tierGating";
-import { isNarrowViewport } from "./mobileLayout";
+import { isNarrowViewport } from "./mobileLayout";
+
 import { normalizeRenderingFailure } from "./renderDiagnostics";
 
 export class SkibaTables implements IVisual {
@@ -547,7 +548,14 @@ export class SkibaTables implements IVisual {
             linkActionIconColumn: s.linkActions.iconColumn.value,
             savedViewState,
             allowInteractions: this.allowInteractions(),
-            hasMoreData
+            hasMoreData,
+            exportGovernance: {
+                enabled: s.exportGovernance.enabled.value,
+                watermarkText: s.exportGovernance.watermarkText.value,
+                locale: s.exportGovernance.locale.value,
+                currency: s.exportGovernance.currency.value,
+                username: s.exportGovernance.username.value
+            }
         };
     }
 

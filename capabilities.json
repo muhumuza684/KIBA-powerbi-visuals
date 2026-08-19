@@ -215,7 +215,16 @@
                 }
             }
         },
-        "linkActions": {
+        "exportGovernance": {
+            "displayName": "Export governance",
+            "properties": {
+                "enabled": { "displayName": "Enable export watermark", "type": { "bool": true } },
+                "watermarkText": { "displayName": "Watermark text", "type": { "text": true } },
+                "locale": { "displayName": "Locale", "type": { "text": true } },
+                "currency": { "displayName": "Currency code", "type": { "text": true } },
+                "username": { "displayName": "Audit username", "type": { "text": true } }
+            }
+        },        "linkActions": {
             "displayName": "Link actions",
             "properties": {
                 "rules": {

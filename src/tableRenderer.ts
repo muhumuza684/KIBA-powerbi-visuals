@@ -23,6 +23,7 @@ import {
 } from "./calcEngine";
 import { selectColumnsForWidth } from "./mobileLayout";
 import { colorForTier4Value, ITier4ConditionalRule, ITier4SavedTheme, paletteColors, Tier4PaletteName, safeTier4Theme } from "./tier4Formatting";
+import { buildWatermarkText, createExportAuditEvent, formatLocaleNumber, recordExportAudit } from "./tier4Governance";
 
 /** A single logical column: a plain row dimension, a value measure, a tooltip-only field, or a user-defined virtual column. */
 export interface ITableColumn {
@@ -96,6 +97,7 @@ export interface ITableRendererSettings {
     /** Fetch More Data (A1-A4): true while Power BI still has more row segments beyond what's
      *  currently loaded. Read from dataView.metadata.segment by visual.ts. */
     hasMoreData: boolean;
+    exportGovernance?: { enabled: boolean; watermarkText: string; locale: string; currency: string; username: string };
 }
 
 type SortDirection = "asc" | "desc" | "none";
@@ -2893,10 +2895,8 @@ export class TableRenderer {
     }
 
     private formatNumber(value: number): string {
-        if (Number.isInteger(value)) {
-            return value.toLocaleString();
-        }
-        return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const governance = this.settings.exportGovernance;
+        return formatLocaleNumber(value, governance?.locale, governance?.currency);
     }
 
     // -----------------------------------------------------------------
@@ -3008,6 +3008,7 @@ export class TableRenderer {
         const csv = d3.csvFormatRows([header, ...rows]);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         this.downloadBlob(blob, "skiba-tables-export.csv");
+        recordExportAudit(createExportAuditEvent("csv", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
     }
 
     /** Real .xlsx export via SheetJS — requires `npm install xlsx --save` in the project. */
@@ -3032,6 +3033,7 @@ export class TableRenderer {
         const wbout: ArrayBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
         const blob = new Blob([wbout], { type: "application/octet-stream" });
         this.downloadBlob(blob, "skiba-tables-export.xlsx");
+        recordExportAudit(createExportAuditEvent("excel", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
     }
 
     /**
@@ -3133,6 +3135,13 @@ export class TableRenderer {
             showHead: "everyPage"
         });
 
+        const watermark = buildWatermarkText(this.settings.exportGovernance);
+        if (watermark) {
+            doc.setTextColor("#9CA3AF");
+            doc.setFontSize(9);
+            doc.text(watermark, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 18, { align: "center" });
+        }
+        recordExportAudit(createExportAuditEvent("pdf", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
         doc.save("skiba-tables-export.pdf");
     }
 

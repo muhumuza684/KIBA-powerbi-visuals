@@ -1,4 +1,4 @@
-﻿{
+{
     "Skiba_Toolbar_Label": "Table options",
     "Skiba_Toolbar_ShowColumns": "Show columns",
     "Skiba_Toolbar_ExpandAllGroups": "Expand all groups",
@@ -52,5 +52,9 @@
     "Skiba_Visual_RowCount_PartialUnknownTotal": "{0}+ rows loaded, more available",
     "Skiba_Visual_RowCount_Complete": "{0} rows",
     "Skiba_Visual_FetchMore_Failed": "Couldn't load more rows \u2014",
-    "Skiba_Visual_FetchMore_Retry": "Retry"
+    "Skiba_Visual_FetchMore_Retry": "Retry",
+    "Skiba_Export_Watermark": "Watermark text",
+    "Skiba_Export_Audit": "Export audit event recorded",
+    "Skiba_Export_Locale": "Locale",
+    "Skiba_Export_Currency": "Currency code"
 }
