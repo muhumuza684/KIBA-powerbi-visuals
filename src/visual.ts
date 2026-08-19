@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 import "../style/visual.less";
 
@@ -32,6 +32,7 @@ import {
 } from "./tableRenderer";
 
 import { parseSavedViewState } from "./savedViewState";
+import { resolveTierRestrictions, ITierRestrictions } from "./tierGating";
 
 export class SkibaTables implements IVisual {
     private host: IVisualHost;
@@ -219,6 +220,7 @@ export class SkibaTables implements IVisual {
         const persistedState = dataView?.metadata?.objects?.["userConfig"]?.["state"] as string | undefined;
 
         const permission = this.resolvePermission(table, permissionsColumnIndex);
+        const tierRestrictions = resolveTierRestrictions(permission);
         const savedViewState = this.resolveSavedViewState(dataView);
         const linkActionRules = this.parseAndValidateLinkActionRules(this.settingsModel.linkActions.rules.value);
 
@@ -239,7 +241,7 @@ export class SkibaTables implements IVisual {
         // tableRenderer.ts, which is the actual enforcement point for D1's gating decision.
         const hasMoreData = !!(dataView && dataView.metadata && (dataView.metadata as powerbi.DataViewMetadata & { segment?: unknown }).segment);
 
-        const rendererSettings = this.buildRendererSettings(dataView as DataView, permission, savedViewState, linkActionRules ?? [], hasMoreData);
+        const rendererSettings = this.buildRendererSettings(dataView as DataView, permission, savedViewState, linkActionRules ?? [], hasMoreData, tierRestrictions);
 
         this.tableRenderer.setData(
             rowColumns,
@@ -477,7 +479,8 @@ export class SkibaTables implements IVisual {
         permission: string | null,
         savedViewState: ISavedViewState | null,
         linkActionRules: ILinkActionRule[],
-        hasMoreData: boolean
+        hasMoreData: boolean,
+        tierRestrictions: ITierRestrictions
     ): ITableRendererSettings {
         const s = this.settingsModel;
         const palette = this.colorPalette;
@@ -523,12 +526,20 @@ export class SkibaTables implements IVisual {
             showToolbar: s.toolbar.showMenu.value,
             searchEnabled: s.search.enabled.value,
             enableColumnFilters: s.filters.showIcons.value,
-            conditionalFormatEnabled: s.conditionalFormatting.enabled.value,
+            // Item 26 (ASSUMED tier value "no-premium" -- see src/tierGating.ts and
+            // docs/LICENSING_NOTES.md): Conditional Formatting is force-disabled
+            // regardless of the pane's own "enabled" toggle when the resolved
+            // permission is tier-restricted.
+            conditionalFormatEnabled: tierRestrictions.conditionalFormattingRestricted ? false : s.conditionalFormatting.enabled.value,
             conditionalFormatMinColor: s.conditionalFormatting.minColor.value.value,
             conditionalFormatMaxColor: s.conditionalFormatting.maxColor.value.value,
             groupsDefaultExpanded: s.grouping.defaultExpanded.value,
             permission,
-            linkActionRules,
+            // Item 26 (ASSUMED): Link Actions are force-disabled the same way, by
+            // handing the renderer an empty rules array -- reusing the existing
+            // "empty rules = feature off" path already used for malformed JSON
+            // (Item 9), rather than adding a second disable path.
+            linkActionRules: tierRestrictions.linkActionsRestricted ? [] : linkActionRules,
             linkActionIconColumn: s.linkActions.iconColumn.value,
             savedViewState,
             allowInteractions: this.allowInteractions(),

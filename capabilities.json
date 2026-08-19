@@ -28,7 +28,7 @@
             "displayName": "Permissions",
             "name": "permissions",
             "kind": "Measure",
-            "description": "Optional: bind a DAX measure (e.g. built on USERPRINCIPALNAME()/USERNAME() looked up against a permissions table) returning a text access value for the current viewer, such as \"no-export\" or \"read-only\". Leave unbound for full functionality for everyone. This is a UI-level control in the visual, not a substitute for Row-Level Security."
+            "description": "Optional: bind a DAX measure (e.g. built on USERPRINCIPALNAME()/USERNAME() looked up against a permissions table) returning a text access value for the current viewer, such as \"no-export\", \"read-only\", or \"no-premium\" (ASSUMED tier value added for Item 26 -- gates Link Actions + Conditional Formatting; see docs/LICENSING_NOTES.md and src/tierGating.ts; confirm the exact value/feature set with the product owner before shipping). Leave unbound for full functionality for everyone. This is a UI-level control in the visual, not a substitute for Row-Level Security."
         }
     ],
     "dataViewMappings": [
