@@ -501,8 +501,17 @@ export class TableRenderer {
     // Fetch More Data (D1, D2, A1-A4)
     // -----------------------------------------------------------------
 
+    /**
+     * D1: export restriction is intentionally separate from Fetch More Data.
+     * See docs/DECISIONS.md: no-export blocks export but not data loading.
+     */
     private isExportRestricted(): boolean {
         return this.settings.permission === "no-export" || this.settings.permission === "read-only";
+    }
+
+    /** D1: read-only blocks Fetch More Data; no-export does not. */
+    private isFetchMoreDataRestricted(): boolean {
+        return this.settings.permission === "read-only";
     }
 
     public isAwaitingMoreData(): boolean {
@@ -518,7 +527,7 @@ export class TableRenderer {
     }
 
     private requestMoreData(): void {
-        if (!this._hasMoreData || this._isFetchingMore || this.isExportRestricted()) {
+        if (!this._hasMoreData || this._isFetchingMore || this.isFetchMoreDataRestricted()) {
             return;
         }
         if (typeof this.host.fetchMoreData !== "function") {
@@ -1554,7 +1563,7 @@ export class TableRenderer {
         );
         status.appendChild(matchText);
 
-        if (this._searchTerm.trim().length > 0 && this._hasMoreData && !this.isExportRestricted()) {
+        if (this._searchTerm.trim().length > 0 && this._hasMoreData && !this.isFetchMoreDataRestricted()) {
             const link = document.createElement("button");
             link.type = "button";
             link.className = "skiba-search__full-dataset-link";

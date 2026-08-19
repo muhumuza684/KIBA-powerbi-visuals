@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 import "../style/visual.less";
 
@@ -349,8 +349,10 @@ export class SkibaTables implements IVisual {
      * null when the role is left unbound entirely, in which case every caller of
      * this value must treat null as "full functionality, no restriction."
      *
-     * D1: this same resolved value is what gates Fetch More Data (in addition to
-     * export) -- see isExportRestricted() in tableRenderer.ts.
+     * D1: this resolved value participates in export and Fetch More Data policy.
+     * The policies are intentionally separate: no-export blocks export but not Fetch More Data;
+     * read-only blocks both. See docs/DECISIONS.md and the separate predicates in
+     * tableRenderer.ts.
      */
     private resolvePermission(table: DataViewTable, permissionsColumnIndex: number | null): string | null {
         if (permissionsColumnIndex === null || !table.rows || table.rows.length === 0) {

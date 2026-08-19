@@ -236,15 +236,15 @@ describe("Item 24 -- retry control for a failed Fetch More Data request", () => 
         expect(container.querySelector(".skiba-fetch-more-indicator")).not.toBeNull();
     });
 
-    test("does not request more data at all once isExportRestricted() is true", () => {
-        const fetchMoreData = jest.fn().mockReturnValue(false);
+    test("no-export still allows Fetch More Data under D1", () => {
+        const fetchMoreData = jest.fn().mockReturnValue(true);
         const host = makeHost(fetchMoreData);
         const { renderer, container } = makeRenderer(host);
 
         renderer.setData([], [], AMOUNT_COLUMN, [], [makeRow("r1", 10)], makeSettings({ hasMoreData: true, permission: "no-export" }));
         (renderer as any).requestMoreData();
 
-        expect(fetchMoreData).not.toHaveBeenCalled();
-        expect(container.querySelector(".skiba-fetch-more-failed")).toBeNull();
+        expect(fetchMoreData).toHaveBeenCalledWith(true);
+        expect(container.querySelector(".skiba-fetch-more-indicator")).not.toBeNull();
     });
 });
