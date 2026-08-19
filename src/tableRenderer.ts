@@ -22,6 +22,7 @@ import {
     CalcValue
 } from "./calcEngine";
 import { selectColumnsForWidth } from "./mobileLayout";
+import { colorForTier4Value, ITier4ConditionalRule, ITier4SavedTheme, paletteColors, Tier4PaletteName, safeTier4Theme } from "./tier4Formatting";
 
 /** A single logical column: a plain row dimension, a value measure, a tooltip-only field, or a user-defined virtual column. */
 export interface ITableColumn {
@@ -208,6 +209,10 @@ export class TableRenderer {
     private _virtualColumnNames: Set<string> = new Set();
     // Item 3: sparklines — set of measure column names with the trend indicator turned on
     private _sparklineColumns: Set<string> = new Set();
+    private _tier4Rules: ITier4ConditionalRule[] = [];
+    private _tier4ColumnColors: Map<string, string> = new Map();
+    private _tier4Palette: Tier4PaletteName = "default";
+    private _tier4SavedTheme: ITier4SavedTheme | null = null;
     // Item 2: drag-to-pivot — the single row column currently promoted to a group-by, if any
     private _dragGroupColumn: ITableColumn | null = null;
     // Item 5: true drill-down — leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
@@ -798,7 +803,11 @@ export class TableRenderer {
             calc: Array.from(this._calcColumns.entries()).map(([name, def]) => ({ name, formula: def.formula })),
             combined: Array.from(this._combinedColumns.entries()).map(([name, def]) => ({ name, template: def.template })),
             sparklines: Array.from(this._sparklineColumns),
-            dragGroup: this._dragGroupColumn ? this._dragGroupColumn.name : null
+            dragGroup: this._dragGroupColumn ? this._dragGroupColumn.name : null,
+            tier4Rules: this._tier4Rules,
+            tier4ColumnColors: Object.fromEntries(this._tier4ColumnColors.entries()),
+            tier4Palette: this._tier4Palette,
+            tier4SavedTheme: this._tier4SavedTheme
         };
 
         // Debounced by a tick so rapid successive edits (e.g. toggling several sparkline
@@ -843,6 +852,14 @@ export class TableRenderer {
                     }
                 });
             }
+            if (Array.isArray(state.tier4Rules)) {
+                this._tier4Rules = state.tier4Rules.filter((r: ITier4ConditionalRule) => r && typeof r.column === "string" && typeof r.value === "string" && typeof r.color === "string");
+            }
+            if (state.tier4ColumnColors && typeof state.tier4ColumnColors === "object") {
+                Object.entries(state.tier4ColumnColors).forEach(([k, v]) => { if (typeof v === "string") this._tier4ColumnColors.set(k, v); });
+            }
+            if (state.tier4Palette === "deuteranopia" || state.tier4Palette === "protanopia") this._tier4Palette = state.tier4Palette;
+            this._tier4SavedTheme = safeTier4Theme(state.tier4SavedTheme);
             if (typeof state.dragGroup === "string") {
                 this._pendingDragGroupName = state.dragGroup;
             }
@@ -854,6 +871,35 @@ export class TableRenderer {
     // -----------------------------------------------------------------
     // Item 2: drag-to-pivot
     // -----------------------------------------------------------------
+
+    private renderTier4FormattingSection(menu: HTMLDivElement, closeMenu: () => void): void {
+        const section = document.createElement("div");
+        section.className = "skiba-toolbar__section skiba-toolbar__section--tier4";
+        const title = document.createElement("div");
+        title.className = "skiba-toolbar__section-title";
+        title.textContent = this.loc("Toolbar_FormattingRules", "In-visual formatting");
+        section.appendChild(title);
+        const palette = document.createElement("select");
+        palette.setAttribute("aria-label", this.loc("Toolbar_ColorPalette", "Color palette"));
+        (["default", "deuteranopia", "protanopia"] as Tier4PaletteName[]).forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; o.selected = this._tier4Palette === name; palette.appendChild(o); });
+        palette.addEventListener("change", () => { this._tier4Palette = palette.value as Tier4PaletteName; const colors = paletteColors(this._tier4Palette); this.settings.conditionalFormatMinColor = colors[0]; this.settings.conditionalFormatMaxColor = colors[1]; this.persistUserConfig(); this.renderVisibleRows(); });
+        section.appendChild(palette);
+        const column = document.createElement("select");
+        column.setAttribute("aria-label", this.loc("Toolbar_RuleColumn", "Rule column"));
+        this.columns.forEach((c) => { const o = document.createElement("option"); o.value = c.name; o.textContent = c.displayName; column.appendChild(o); });
+        const operator = document.createElement("select");
+        ["equals", "contains", "gt", "gte", "lt", "lte"].forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; operator.appendChild(o); });
+        const value = document.createElement("input"); value.type = "text"; value.placeholder = this.loc("Toolbar_RuleValue", "Value");
+        const color = document.createElement("input"); color.type = "color"; color.value = "#FFF2CC";
+        const add = document.createElement("button"); add.type = "button"; add.textContent = this.loc("Toolbar_AddRule", "Add rule");
+        add.addEventListener("click", () => { this._tier4Rules.push({ column: column.value, operator: operator.value as ITier4ConditionalRule["operator"], value: value.value, color: color.value }); this.persistUserConfig(); this.renderVisibleRows(); });
+        section.append(column, operator, value, color, add);
+        this.columns.forEach((c) => { const input = document.createElement("input"); input.type = "color"; input.value = this._tier4ColumnColors.get(c.name) ?? "#FFFFFF"; input.title = `Override ${c.displayName}`; input.addEventListener("change", () => { if (input.value === "#FFFFFF") this._tier4ColumnColors.delete(c.name); else this._tier4ColumnColors.set(c.name, input.value); this.persistUserConfig(); this.renderVisibleRows(); }); section.appendChild(input); });
+        const saveTheme = document.createElement("button"); saveTheme.type = "button"; saveTheme.textContent = this.loc("Toolbar_SaveTheme", "Save theme");
+        saveTheme.addEventListener("click", () => { const name = window.prompt(this.loc("Toolbar_ThemeName", "Theme name"), this._tier4SavedTheme?.name ?? "Operations"); if (name) { this._tier4SavedTheme = { name, palette: this._tier4Palette }; this.persistUserConfig(); } });
+        section.appendChild(saveTheme);
+        menu.appendChild(section);
+    }
 
     /** The group-by columns actually used for grouping: the real "Group by" role, plus any drag-pivoted column first. */
     private effectiveGroupColumns(): ITableColumn[] {
@@ -1076,6 +1122,7 @@ export class TableRenderer {
 
         this.renderCalculationsSection(menu, closeMenu);
         this.renderCombineColumnsSection(menu, closeMenu);
+        this.renderTier4FormattingSection(menu, closeMenu);
 
         if (this.effectiveGroupColumns().length > 0) {
             menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ExpandAllGroups", "Expand all groups"), () => {
@@ -2608,7 +2655,7 @@ export class TableRenderer {
             const range = this._columnMinMax.get(col.name);
             if (range && range.max > range.min) {
                 const t = (rawValue - range.min) / (range.max - range.min);
-                cell.style.backgroundColor = d3.interpolateRgb(this.settings.conditionalFormatMinColor, this.settings.conditionalFormatMaxColor)(t);
+                cell.style.backgroundColor = this._tier4ColumnColors.get(col.name) ?? colorForTier4Value(rawValue, this._tier4Rules) ?? d3.interpolateRgb(this.settings.conditionalFormatMinColor, this.settings.conditionalFormatMaxColor)(t);
             }
         }
 
