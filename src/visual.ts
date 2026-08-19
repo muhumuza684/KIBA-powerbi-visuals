@@ -33,7 +33,8 @@ import {
 
 import { parseSavedViewState } from "./savedViewState";
 import { resolveTierRestrictions, ITierRestrictions } from "./tierGating";
-import { isNarrowViewport } from "./mobileLayout";
+import { isNarrowViewport } from "./mobileLayout";
+import { normalizeRenderingFailure } from "./renderDiagnostics";
 
 export class SkibaTables implements IVisual {
     private host: IVisualHost;
@@ -129,8 +130,8 @@ export class SkibaTables implements IVisual {
             this.updateInternal(options);
             this.events.renderingFinished(options);
         } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error);
-            this.events.renderingFailed(options, reason);
+            const failure = normalizeRenderingFailure(error);
+            this.events.renderingFailed(options, `${failure.kind}: ${failure.reason}`);
             throw error;
         }
     }
