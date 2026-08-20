@@ -37,7 +37,7 @@ import { isNarrowViewport } from "./mobileLayout";
 
 import { normalizeRenderingFailure } from "./renderDiagnostics";
 
-export class SkibaTables implements IVisual {
+export class DataLakeTables implements IVisual {
     private host: IVisualHost;
     private selectionManager: ISelectionManager;
     private tooltipService: ITooltipService;
@@ -81,10 +81,10 @@ export class SkibaTables implements IVisual {
         this.formattingSettingsService = new FormattingSettingsService(this.localizationManager);
 
         this.rootElement = options.element;
-        this.rootElement.classList.add("skiba-tables-visual");
+        this.rootElement.classList.add("data-lake-tables-visual");
 
         this.tableContainer = document.createElement("div");
-        this.tableContainer.className = "skiba-tables-container";
+        this.tableContainer.className = "data-lake-tables-container";
         this.rootElement.appendChild(this.tableContainer);
 
         this.tableRenderer = new TableRenderer(
@@ -163,7 +163,12 @@ export class SkibaTables implements IVisual {
         // `supportsEmptyDataView` means Power BI still calls update() with a (mostly empty)
         // dataView in this state, so metadata.columns.length is the reliable signal here,
         // matching Microsoft's own landing-page reference pattern.
-        const hasAnyFieldsAssigned = !!(dataView && dataView.metadata && dataView.metadata.columns && dataView.metadata.columns.length > 0);
+        // Report view can provide usable table metadata even when the optional
+        // metadata.columns array is empty. Prefer table.columns as the authoritative
+        // field-assignment signal, with metadata.columns as a compatible fallback.
+        const metadataColumnCount = dataView?.metadata?.columns?.length ?? 0;
+        const tableColumnCount = dataView?.table?.columns?.length ?? 0;
+        const hasAnyFieldsAssigned = metadataColumnCount > 0 || tableColumnCount > 0;
 
         if (!hasAnyFieldsAssigned) {
             if (!this.hasRenderedRealData) {
@@ -254,7 +259,7 @@ export class SkibaTables implements IVisual {
             rows,
             rendererSettings,
             persistedState,
-            "Skiba Tables",
+            "Data Lake Tables",
             isSegmentContinuation
         );
         this.hasRenderedRealData = true;
@@ -500,7 +505,7 @@ export class SkibaTables implements IVisual {
         const themeCellBg = palette.background ? palette.background.value : "#FFFFFF";
         const themeCellFont = palette.foreground ? palette.foreground.value : "#333333";
         const themeAltRow = palette.backgroundLight ? palette.backgroundLight.value : "#FAFAFA";
-        const themeAccent = (palette.getColor("skiba-tables-accent").value) || "#0078D4";
+        const themeAccent = (palette.getColor("data-lake-tables-accent").value) || "#0078D4";
         const themeTotalsBg = palette.backgroundLight ? palette.backgroundLight.value : "#F0F2F5";
 
         const headerBg = this.themeOrUserColor(dataView, "header", "bgColor", s.header.bgColor.value.value, themeHeaderBg);
@@ -567,7 +572,7 @@ export class SkibaTables implements IVisual {
         // isolation test with this whole block disabled still looped identically,
         // ruling this code out. Restored to its real, intended behavior.
         const narrow = isNarrowViewport(width);
-        this.rootElement.classList.toggle("skiba-tables-visual--narrow", narrow);
+        this.rootElement.classList.toggle("data-lake-tables-visual--narrow", narrow);
         if (narrow) {
             const menuMaxWidth = Math.max(160, width - 16);
             this.rootElement.style.setProperty("--skiba-narrow-menu-max-width", `${menuMaxWidth}px`);

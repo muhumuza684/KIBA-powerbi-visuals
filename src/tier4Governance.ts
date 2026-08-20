@@ -3,10 +3,18 @@ export type GovernmentCurrency = "UGX" | "USD" | "EUR" | "GBP" | "MWK";
 export interface IExportGovernance { enabled: boolean; watermarkText: string; locale: string; currency: string; username: string; }
 export interface IExportAuditEvent { kind: ExportKind; username: string; rowCount: number; timestamp: string; }
 
-export function formatLocaleNumber(value: number, locale?: string, currency?: string): string {
-    const options: Intl.NumberFormatOptions = currency ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : (Number.isInteger(value) ? { maximumFractionDigits: 0 } : { maximumFractionDigits: 2 });
-    if (currency) { options.style = "currency"; options.currency = currency; }
-    return new Intl.NumberFormat(locale || undefined, options).format(value);
+const localeFormatterCache = new Map<string, Intl.NumberFormat>();
+
+export function formatLocaleNumber(value: number, locale = "en-UG", currency = ""): string {
+    const key = `${locale}|${currency}`;
+    let formatter = localeFormatterCache.get(key);
+    if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, currency
+            ? { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }
+            : { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        localeFormatterCache.set(key, formatter);
+    }
+    return formatter.format(value);
 }
 
 export function buildWatermarkText(governance?: Partial<IExportGovernance>): string {

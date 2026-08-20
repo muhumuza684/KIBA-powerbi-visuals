@@ -1,4 +1,4 @@
-# Skiba Tables — three-way merge notes (tier1 + tier2 + tier3)
+# Data Lake Tables — three-way merge notes (tier1 + tier2 + tier3)
 
 Merged against your real baseline (`skiba-baseline.zip`), via git branches so every
 conflict surfaced precisely instead of being guessed. Order: tier1 → tier2 → tier3.

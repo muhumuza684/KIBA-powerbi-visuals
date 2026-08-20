@@ -1,4 +1,4 @@
-# Skiba Tables
+# Data Lake Tables
 
 The fastest, cleanest, most intuitive way to view, slice, and export your Power BI data — without enterprise bloat.
 
@@ -30,7 +30,7 @@ The fastest, cleanest, most intuitive way to view, slice, and export your Power 
 
 ## Trying it out
 
-1. Import `dist/skibaTables_*.pbiviz` into Power BI Desktop via **Visualizations pane → ... → Import a visual from a file**.
+1. Import `dist/dataLakeTables_*.pbiviz` into Power BI Desktop via **Visualizations pane → ... → Import a visual from a file**.
 2. Drag any table-shaped fields onto it (categories + numeric measures work best).
 3. Expand a group and click into a leaf row to try the drill-down sub-grid.
 
@@ -42,3 +42,7 @@ npx pbiviz package
 ```
 
 Output lands in `dist/`.
+
+## Data Lake Tables identity standardization
+
+The product-facing name is **Data Lake Tables**. The stable Power BI `name`, `guid`, and `visualClassName` fields remain unchanged deliberately so existing reports and saved visual instances remain compatible. Internal `skiba-*` CSS selectors are also retained because they are implementation selectors and include protected narrow-layout behavior; they are not user-facing branding.

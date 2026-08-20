@@ -150,6 +150,18 @@ type RenderNode =
     | { kind: "detail"; depth: number; row: ITableRow };
 
 const ROW_BUFFER = 6; // extra rows rendered above/below viewport to avoid flicker while scrolling
+
+/** Data Lake Tables palettes. Every preset is wired to live conditional-format colors. */
+const DLT_PALETTE_PRESETS: Array<{ name: string; label: string; min: string; max: string }> = [
+    { name: "default", label: "Standard", min: "#DFFF91", max: "#0B3A70" },
+    { name: "deuteranopia", label: "Deuteranopia safe", min: "#FDE725", max: "#440154" },
+    { name: "protanopia", label: "Protanopia safe", min: "#FDE725", max: "#31688E" },
+    { name: "ura", label: "URA navy and yellow", min: "#FFF4A3", max: "#0B3A70" },
+    { name: "ocean", label: "Ocean blue", min: "#D9F3FF", max: "#075985" },
+    { name: "teal", label: "Teal operations", min: "#CCFBF1", max: "#115E59" },
+    { name: "highContrast", label: "High contrast", min: "#FFFFFF", max: "#000000" }
+];
+const DLT_PALETTE_NAMES = DLT_PALETTE_PRESETS.map((preset) => preset.name);
 const GROUP_SEP = "\u241F"; // unit separator — safe delimiter for building unique group path keys
 
 /**
@@ -228,6 +240,8 @@ export class TableRenderer {
     private _pendingDragGroupName?: string;
     private _hydratedFromPersist = false;
     private _persistDebounce: number | undefined;
+    /** One document-level dismissal handler, replaced rather than accumulated on every toolbar rerender. */
+    private _toolbarDocumentClickHandler: ((event: MouseEvent) => void) | undefined;
 
     /** Latest known "report's default view" read back from the report's object model (Item 7). Kept fresh on every setData(); only *applied* to live state once, by the caller. */
     private _persistedViewState: ISavedViewState | null = null;
@@ -243,7 +257,7 @@ export class TableRenderer {
     private filterChipsRoot!: HTMLDivElement;
 
     private defaultRowHeight = 32;
-    private reportTitle = "Skiba Tables";
+    private reportTitle = "Data Lake Tables";
 
     constructor(
         container: HTMLDivElement,
@@ -411,6 +425,13 @@ export class TableRenderer {
         reportTitle?: string,
         isSegmentContinuation: boolean = false
     ): void {
+        // Landing/empty states clear the container and detach the renderer skeleton.
+        // Rebuild it before rendering real data so Report view never renders into
+        // detached header/body roots after fields are assigned.
+        if (!this.container.contains(this.headerRoot)) {
+            this.buildSkeleton();
+        }
+
         this.rowColumns = rowColumns;
         this.groupColumns = groupColumns;
         this.valueColumns = valueColumns;
@@ -818,7 +839,8 @@ export class TableRenderer {
             tier4Rules: this._tier4Rules,
             tier4ColumnColors: Object.fromEntries(this._tier4ColumnColors.entries()),
             tier4Palette: this._tier4Palette,
-            tier4SavedTheme: this._tier4SavedTheme
+            tier4SavedTheme: this._tier4SavedTheme,
+            layout: { fontSize: this.settings.fontSize, rowHeight: this.settings.rowHeight, headerBold: this.settings.headerBold },
         };
 
         // Debounced by a tick so rapid successive edits (e.g. toggling several sparkline
@@ -836,7 +858,7 @@ export class TableRenderer {
                     }
                 ]
             });
-        }, 200);
+        }, 0);
     }
 
     private hydrateUserConfig(json: string): void {
@@ -869,8 +891,18 @@ export class TableRenderer {
             if (state.tier4ColumnColors && typeof state.tier4ColumnColors === "object") {
                 Object.entries(state.tier4ColumnColors).forEach(([k, v]) => { if (typeof v === "string") this._tier4ColumnColors.set(k, v); });
             }
-            if (state.tier4Palette === "deuteranopia" || state.tier4Palette === "protanopia") this._tier4Palette = state.tier4Palette;
+            if (typeof state.tier4Palette === "string" && DLT_PALETTE_NAMES.includes(state.tier4Palette)) this._tier4Palette = state.tier4Palette as Tier4PaletteName;
             this._tier4SavedTheme = safeTier4Theme(state.tier4SavedTheme);
+            if (state.layout && typeof state.layout === "object") {
+                if (typeof state.layout.fontSize === "number") this.settings.fontSize = Math.max(9, Math.min(24, state.layout.fontSize));
+                if (typeof state.layout.rowHeight === "number") { this.settings.rowHeight = Math.max(22, Math.min(64, state.layout.rowHeight)); this.defaultRowHeight = this.settings.rowHeight; }
+                if (typeof state.layout.headerBold === "boolean") this.settings.headerBold = state.layout.headerBold;
+            }
+            if (state.layout && typeof state.layout === "object") {
+                if (typeof state.layout.fontSize === "number") this.settings.fontSize = Math.max(9, Math.min(24, state.layout.fontSize));
+                if (typeof state.layout.rowHeight === "number") { this.settings.rowHeight = Math.max(22, Math.min(64, state.layout.rowHeight)); this.defaultRowHeight = this.settings.rowHeight; }
+                if (typeof state.layout.headerBold === "boolean") this.settings.headerBold = state.layout.headerBold;
+            }
             if (typeof state.dragGroup === "string") {
                 this._pendingDragGroupName = state.dragGroup;
             }
@@ -883,35 +915,286 @@ export class TableRenderer {
     // Item 2: drag-to-pivot
     // -----------------------------------------------------------------
 
-    private renderTier4FormattingSection(menu: HTMLDivElement, closeMenu: () => void): void {
-        const section = document.createElement("div");
-        section.className = "skiba-toolbar__section skiba-toolbar__section--tier4";
+    private renderDataLakeLayoutSection(menu: HTMLDivElement): void {
+        const section = document.createElement("section");
+        section.className = "skiba-toolbar__section datalake-layout-section";
         const title = document.createElement("div");
         title.className = "skiba-toolbar__section-title";
-        title.textContent = this.loc("Toolbar_FormattingRules", "In-visual formatting");
+        title.textContent = "Data Lake Tables layout";
         section.appendChild(title);
-        const palette = document.createElement("select");
-        palette.setAttribute("aria-label", this.loc("Toolbar_ColorPalette", "Color palette"));
-        (["default", "deuteranopia", "protanopia"] as Tier4PaletteName[]).forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; o.selected = this._tier4Palette === name; palette.appendChild(o); });
-        palette.addEventListener("change", () => { this._tier4Palette = palette.value as Tier4PaletteName; const colors = paletteColors(this._tier4Palette); this.settings.conditionalFormatMinColor = colors[0]; this.settings.conditionalFormatMaxColor = colors[1]; this.persistUserConfig(); this.renderVisibleRows(); });
-        section.appendChild(palette);
-        const column = document.createElement("select");
-        column.setAttribute("aria-label", this.loc("Toolbar_RuleColumn", "Rule column"));
-        this.columns.forEach((c) => { const o = document.createElement("option"); o.value = c.name; o.textContent = c.displayName; column.appendChild(o); });
-        const operator = document.createElement("select");
-        ["equals", "contains", "gt", "gte", "lt", "lte"].forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; operator.appendChild(o); });
-        const value = document.createElement("input"); value.type = "text"; value.placeholder = this.loc("Toolbar_RuleValue", "Value");
-        const color = document.createElement("input"); color.type = "color"; color.value = "#FFF2CC";
-        const add = document.createElement("button"); add.type = "button"; add.textContent = this.loc("Toolbar_AddRule", "Add rule");
-        add.addEventListener("click", () => { this._tier4Rules.push({ column: column.value, operator: operator.value as ITier4ConditionalRule["operator"], value: value.value, color: color.value }); this.persistUserConfig(); this.renderVisibleRows(); });
-        section.append(column, operator, value, color, add);
-        this.columns.forEach((c) => { const input = document.createElement("input"); input.type = "color"; input.value = this._tier4ColumnColors.get(c.name) ?? "#FFFFFF"; input.title = `Override ${c.displayName}`; input.addEventListener("change", () => { if (input.value === "#FFFFFF") this._tier4ColumnColors.delete(c.name); else this._tier4ColumnColors.set(c.name, input.value); this.persistUserConfig(); this.renderVisibleRows(); }); section.appendChild(input); });
-        const saveTheme = document.createElement("button"); saveTheme.type = "button"; saveTheme.textContent = this.loc("Toolbar_SaveTheme", "Save theme");
-        saveTheme.addEventListener("click", () => { const name = window.prompt(this.loc("Toolbar_ThemeName", "Theme name"), this._tier4SavedTheme?.name ?? "Operations"); if (name) { this._tier4SavedTheme = { name, palette: this._tier4Palette }; this.persistUserConfig(); } });
-        section.appendChild(saveTheme);
+        const help = document.createElement("div");
+        help.className = "datalake-settings-help";
+        help.textContent = "Adjust the table density and hierarchy without reopening the formatting pane.";
+        section.appendChild(help);
+
+        const addRange = (labelText: string, min: number, max: number, step: number, current: number, apply: (value: number) => void): void => {
+            const row = document.createElement("label");
+            row.className = "datalake-layout-control";
+            const label = document.createElement("span");
+            label.textContent = labelText;
+            const value = document.createElement("output");
+            value.textContent = String(current);
+            const input = document.createElement("input");
+            input.type = "range";
+            input.min = String(min);
+            input.max = String(max);
+            input.step = String(step);
+            input.value = String(current);
+            const commit = (): void => {
+                const n = Number(input.value);
+                if (!Number.isFinite(n)) return;
+                value.textContent = String(n);
+                apply(n);
+                this.persistUserConfig();
+            };
+            input.addEventListener("input", commit);
+            input.addEventListener("change", commit);
+            input.addEventListener("pointerup", commit);
+            row.append(label, input, value);
+            section.appendChild(row);
+        };
+        addRange("Font size", 9, 24, 1, Number(this.settings.fontSize) || 12, (n) => {
+            this.settings.fontSize = n;
+            this.applyThemeVars();
+            this.renderHeader();
+            this.renderVisibleRows();
+            this.persistUserConfig();
+        });
+        addRange("Row height", 22, 64, 1, Number(this.settings.rowHeight) || 32, (n) => {
+            this.settings.rowHeight = n;
+            this.defaultRowHeight = n;
+            this.applyThemeVars();
+            this.renderHeader();
+            this.renderVisibleRows();
+            this.persistUserConfig();
+        });
+
+        const boldLabel = document.createElement("label");
+        boldLabel.className = "datalake-layout-check";
+        const bold = document.createElement("input");
+        bold.type = "checkbox";
+        bold.checked = !!this.settings.headerBold;
+        bold.addEventListener("change", () => { this.settings.headerBold = bold.checked; this.applyThemeVars(); this.renderHeader(); this.persistUserConfig(); });
+        boldLabel.append(bold, document.createTextNode("Emphasize headers"));
+        section.appendChild(boldLabel);
+
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.className = "datalake-settings-secondary";
+        reset.textContent = "Reset layout";
+        reset.addEventListener("click", () => {
+            this.settings.fontSize = 12;
+            this.settings.rowHeight = 32;
+            this.settings.headerBold = true;
+            this.defaultRowHeight = 32;
+            this.applyThemeVars();
+            this.renderHeader();
+            this.renderVisibleRows();
+            this.persistUserConfig();
+            this.renderToolbar();
+        });
+        section.appendChild(reset);
         menu.appendChild(section);
     }
+    private renderTier4FormattingSection(menu: HTMLDivElement, closeMenu: () => void): void {
+        const section = document.createElement("section");
+        section.className = "skiba-toolbar__section skiba-toolbar__section--tier4 skiba-format-editor";
+        section.setAttribute("aria-label", this.loc("Toolbar_FormattingRules", "In-visual formatting"));
 
+        const heading = document.createElement("div");
+        heading.className = "skiba-format-editor__heading";
+        const title = document.createElement("strong");
+        title.textContent = this.loc("Toolbar_FormattingRules", "In-visual formatting");
+        heading.appendChild(title);
+        const subtitle = document.createElement("span");
+        subtitle.textContent = this.loc("Toolbar_FormattingHelp", "Create rules that apply immediately to table cells.");
+        heading.appendChild(subtitle);
+        section.appendChild(heading);
+
+        const paletteRow = document.createElement("div");
+        paletteRow.className = "skiba-format-editor__palette-row";
+        const paletteLabel = document.createElement("span");
+        paletteLabel.textContent = this.loc("Toolbar_ColorPalette", "Palette");
+        paletteRow.appendChild(paletteLabel);
+        DLT_PALETTE_PRESETS.forEach((preset) => {
+            const name = preset.name;
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "skiba-format-editor__palette-button";
+            button.dataset.palette = name;
+            button.textContent = preset.label;
+            button.setAttribute("aria-pressed", String(this._tier4Palette === name));
+            button.addEventListener("click", () => {
+                this._tier4Palette = name as Tier4PaletteName;
+                const colors = [preset.min, preset.max] as [string, string];
+                this.settings.conditionalFormatMinColor = colors[0];
+                this.settings.conditionalFormatMaxColor = colors[1];
+                this.persistUserConfig();
+                this.renderVisibleRows();
+                this.renderToolbar();
+            });
+            paletteRow.appendChild(button);
+        });
+        section.appendChild(paletteRow);
+
+        const ruleBuilder = document.createElement("div");
+        ruleBuilder.className = "skiba-format-editor__builder";
+        const builderTitle = document.createElement("div");
+        builderTitle.className = "skiba-format-editor__label";
+        builderTitle.textContent = this.loc("Toolbar_NewRule", "New rule");
+        ruleBuilder.appendChild(builderTitle);
+
+        const column = document.createElement("select");
+        column.className = "skiba-format-editor__select";
+        column.setAttribute("aria-label", this.loc("Toolbar_RuleColumn", "Column"));
+        this.columns.forEach((c) => {
+            const option = document.createElement("option");
+            option.value = c.name;
+            option.textContent = c.displayName;
+            column.appendChild(option);
+        });
+        ruleBuilder.appendChild(column);
+
+        const operator = document.createElement("select");
+        operator.className = "skiba-format-editor__select";
+        operator.setAttribute("aria-label", this.loc("Toolbar_RuleOperator", "Operator"));
+        (["equals", "contains", "gt", "gte", "lt", "lte"] as ITier4ConditionalRule["operator"][]).forEach((name) => {
+            const option = document.createElement("option");
+            option.value = name;
+            option.textContent = name === "gte" ? "At least" : name === "lte" ? "At most" : name;
+            operator.appendChild(option);
+        });
+        ruleBuilder.appendChild(operator);
+
+        const value = document.createElement("input");
+        value.className = "skiba-format-editor__input";
+        value.type = "text";
+        value.placeholder = this.loc("Toolbar_RuleValue", "Value or threshold");
+        value.setAttribute("aria-label", this.loc("Toolbar_RuleValue", "Value or threshold"));
+        ruleBuilder.appendChild(value);
+
+        const color = document.createElement("input");
+        color.className = "skiba-format-editor__color";
+        color.type = "color";
+        color.value = "#DFFF91";
+        color.setAttribute("aria-label", this.loc("Toolbar_RuleColor", "Rule color"));
+        ruleBuilder.appendChild(color);
+
+        const add = document.createElement("button");
+        add.className = "skiba-format-editor__primary";
+        add.type = "button";
+        add.textContent = this.loc("Toolbar_AddRule", "Add rule");
+        add.addEventListener("click", () => {
+            if (!column.value || !value.value.trim()) return;
+            this._tier4Rules.push({ column: column.value, operator: operator.value as ITier4ConditionalRule["operator"], value: value.value.trim(), color: color.value });
+            value.value = "";
+            this.persistUserConfig();
+            this.renderVisibleRows();
+            this.renderToolbar();
+        });
+        ruleBuilder.appendChild(add);
+        section.appendChild(ruleBuilder);
+
+        const rulesTitle = document.createElement("div");
+        rulesTitle.className = "skiba-format-editor__label";
+        rulesTitle.textContent = `${this.loc("Toolbar_ActiveRules", "Active rules")} (${this._tier4Rules.length})`;
+        section.appendChild(rulesTitle);
+        const rules = document.createElement("div");
+        rules.className = "skiba-format-editor__rules";
+        this._tier4Rules.forEach((rule, index) => {
+            const card = document.createElement("div");
+            card.className = "skiba-format-editor__rule-card";
+            const swatch = document.createElement("span");
+            swatch.className = "skiba-format-editor__swatch";
+            swatch.style.backgroundColor = rule.color;
+            card.appendChild(swatch);
+            const text = document.createElement("span");
+            text.textContent = `${rule.column} ${rule.operator} ${rule.value}`;
+            card.appendChild(text);
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "skiba-format-editor__icon-button";
+            remove.textContent = "×";
+            remove.title = this.loc("Toolbar_RemoveRule", "Remove rule");
+            remove.setAttribute("aria-label", `${this.loc("Toolbar_RemoveRule", "Remove rule")} ${index + 1}`);
+            remove.addEventListener("click", () => {
+                this._tier4Rules.splice(index, 1);
+                this.persistUserConfig();
+                this.renderVisibleRows();
+                this.renderToolbar();
+            });
+            card.appendChild(remove);
+            rules.appendChild(card);
+        });
+        if (this._tier4Rules.length === 0) {
+            const empty = document.createElement("span");
+            empty.className = "skiba-format-editor__empty";
+            empty.textContent = this.loc("Toolbar_NoRules", "No active rules yet.");
+            rules.appendChild(empty);
+        }
+        section.appendChild(rules);
+
+        const columnsTitle = document.createElement("div");
+        columnsTitle.className = "skiba-format-editor__label";
+        columnsTitle.textContent = this.loc("Toolbar_ColumnOverrides", "Column colors");
+        section.appendChild(columnsTitle);
+        const overrides = document.createElement("div");
+        overrides.className = "skiba-format-editor__overrides";
+        this.columns.forEach((c) => {
+            const row = document.createElement("label");
+            row.className = "skiba-format-editor__override";
+            const name = document.createElement("span");
+            name.textContent = c.displayName;
+            row.appendChild(name);
+            const input = document.createElement("input");
+            input.type = "color";
+            input.value = this._tier4ColumnColors.get(c.name) ?? "#FFFFFF";
+            input.setAttribute("aria-label", `Color override for ${c.displayName}`);
+            input.addEventListener("change", () => {
+                if (input.value.toUpperCase() === "#FFFFFF") this._tier4ColumnColors.delete(c.name);
+                else this._tier4ColumnColors.set(c.name, input.value);
+                this.persistUserConfig();
+                this.renderVisibleRows();
+            });
+            row.appendChild(input);
+            overrides.appendChild(row);
+        });
+        section.appendChild(overrides);
+
+        const actions = document.createElement("div");
+        actions.className = "skiba-format-editor__actions";
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.textContent = this.loc("Toolbar_ResetRules", "Reset");
+        reset.addEventListener("click", () => {
+            this._tier4Rules = [];
+            this._tier4ColumnColors.clear();
+            this._tier4Palette = "default";
+            this.persistUserConfig();
+            this.renderVisibleRows();
+            this.renderToolbar();
+        });
+        actions.appendChild(reset);
+        const saveTheme = document.createElement("button");
+        saveTheme.type = "button";
+        saveTheme.textContent = this.loc("Toolbar_SaveTheme", "Save theme");
+        saveTheme.addEventListener("click", () => {
+            const name = window.prompt(this.loc("Toolbar_ThemeName", "Theme name"), this._tier4SavedTheme?.name ?? "Operations");
+            if (name && name.trim()) {
+                this._tier4SavedTheme = { name: name.trim(), palette: this._tier4Palette };
+                this.persistUserConfig();
+                this.renderToolbar();
+            }
+        });
+        actions.appendChild(saveTheme);
+        const close = document.createElement("button");
+        close.type = "button";
+        close.textContent = this.loc("Toolbar_Done", "Done");
+        close.addEventListener("click", closeMenu);
+        actions.appendChild(close);
+        section.appendChild(actions);
+        menu.appendChild(section);
+    }
     /** The group-by columns actually used for grouping: the real "Group by" role, plus any drag-pivoted column first. */
     private effectiveGroupColumns(): ITableColumn[] {
         return this._dragGroupColumn ? [this._dragGroupColumn, ...this.groupColumns] : this.groupColumns;
@@ -1017,6 +1300,12 @@ export class TableRenderer {
     // -----------------------------------------------------------------
 
     private renderToolbar(): void {
+        const previousMenu = this.toolbarRoot.querySelector(".skiba-toolbar__menu") as HTMLDivElement | null;
+        const shouldRestoreMenuOpen = previousMenu !== null && previousMenu.style.display !== "none";
+        if (this._toolbarDocumentClickHandler) {
+            document.removeEventListener("click", this._toolbarDocumentClickHandler);
+            this._toolbarDocumentClickHandler = undefined;
+        }
         this.clearElement(this.toolbarRoot);
         this.toolbarRoot.style.display = this.settings.showToolbar ? "" : "none";
         if (!this.settings.showToolbar) {
@@ -1024,17 +1313,19 @@ export class TableRenderer {
         }
 
         const hamburger = document.createElement("button");
-        hamburger.className = "skiba-hamburger";
-        const optionsLabel = this.loc("Toolbar_TableOptions", "Table options");
+        hamburger.className = "skiba-hamburger datalake-tables-settings-button";
+        const optionsLabel = this.loc("Toolbar_TableOptions", "Data Lake Tables settings");
         hamburger.setAttribute("aria-label", optionsLabel);
         hamburger.setAttribute("aria-haspopup", "true");
         hamburger.setAttribute("aria-expanded", "false");
         hamburger.title = optionsLabel;
-        hamburger.textContent = "\u2699\uFE0F"; // gear icon
+        hamburger.textContent = "⚙";
+        hamburger.setAttribute("aria-label", "Data Lake Tables settings");
+        hamburger.title = "Data Lake Tables settings";
         this.toolbarRoot.appendChild(hamburger);
 
         const menu = document.createElement("div");
-        menu.className = "skiba-toolbar__menu";
+        menu.className = "skiba-toolbar__menu datalake-tables-settings-menu";
         menu.setAttribute("role", "menu");
         menu.style.display = "none";
         this.toolbarRoot.appendChild(menu);
@@ -1071,7 +1362,25 @@ export class TableRenderer {
                 hamburger.focus();
             }
         });
-        document.addEventListener("click", closeMenu);
+        // Internal interaction never dismisses the panel. This is important for select,
+        // checkbox, range, color, and text controls whose change/input events can cause
+        // renderToolbar() to rebuild the menu.
+        menu.addEventListener("click", (event: MouseEvent) => event.stopPropagation());
+        menu.addEventListener("input", (event: Event) => event.stopPropagation());
+        menu.addEventListener("change", (event: Event) => event.stopPropagation());
+
+        this._toolbarDocumentClickHandler = (event: MouseEvent): void => {
+            const target = event.target as Node | null;
+            if (!target || !this.toolbarRoot.contains(target)) {
+                closeMenu();
+            }
+        };
+        document.addEventListener("click", this._toolbarDocumentClickHandler);
+
+        // Restore the open panel after an internal choice triggers a toolbar rerender.
+        if (shouldRestoreMenuOpen) {
+            openMenu();
+        }
 
         // Column visibility toggles
         const columnsSection = document.createElement("div");
@@ -1133,6 +1442,7 @@ export class TableRenderer {
 
         this.renderCalculationsSection(menu, closeMenu);
         this.renderCombineColumnsSection(menu, closeMenu);
+        this.renderDataLakeLayoutSection(menu);
         this.renderTier4FormattingSection(menu, closeMenu);
 
         if (this.effectiveGroupColumns().length > 0) {
@@ -1169,12 +1479,12 @@ export class TableRenderer {
         // Reset sorts / filters — harmless, no confirmation needed
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetSorts", "Reset sorts"), () => {
             this.resetSorts();
-            closeMenu();
+            this.persistUserConfig();
         }));
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetFilters", "Reset filters"), () => {
             this._columnFilters.clear();
             this.commitFilterChange();
-            closeMenu();
+            this.persistUserConfig();
         }));
 
         // Reset column widths / order — discards user customization, so confirm first
@@ -1187,7 +1497,7 @@ export class TableRenderer {
             if (window.confirm(this.loc("Confirm_ResetColumnWidths", "This will discard your custom column widths. Continue?"))) {
                 this.resetColumnWidths();
             }
-            closeMenu();
+            this.persistUserConfig();
         }));
         menu.appendChild(this.makeMenuButton(this.loc("Toolbar_ResetColumnOrder", "Reset column order"), () => {
             const doReset = () => {
@@ -1198,7 +1508,7 @@ export class TableRenderer {
             if (window.confirm(this.loc("Confirm_ResetColumnOrder", "This will restore the original column order. Continue?"))) {
                 doReset();
             }
-            closeMenu();
+            this.persistUserConfig();
         }));
         menu.appendChild(this.makeDivider());
 
@@ -2642,6 +2952,32 @@ export class TableRenderer {
         return wrap;
     }
 
+    private tier4CellColor(columnName: string, rawValue: unknown): string | null {
+        const columnColor = this._tier4ColumnColors.get(columnName);
+        let result = columnColor ?? null;
+        const textValue = rawValue === null || rawValue === undefined ? "" : String(rawValue);
+        const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
+        this._tier4Rules.forEach((rule) => {
+            if (rule.column !== columnName) return;
+            const numericRule = Number(rule.value);
+            const bothNumeric = Number.isFinite(numericValue) && Number.isFinite(numericRule);
+            const matched = rule.operator === "contains"
+                ? textValue.toLowerCase().includes(rule.value.toLowerCase())
+                : rule.operator === "equals"
+                    ? (bothNumeric ? numericValue === numericRule : textValue === rule.value)
+                    : rule.operator === "gt"
+                        ? bothNumeric && numericValue > numericRule
+                        : rule.operator === "gte"
+                            ? bothNumeric && numericValue >= numericRule
+                            : rule.operator === "lt"
+                                ? bothNumeric && numericValue < numericRule
+                                : rule.operator === "lte"
+                                    ? bothNumeric && numericValue <= numericRule
+                                    : false;
+            if (matched) result = rule.color;
+        });
+        return result;
+    }
     private renderCell(row: ITableRow, col: ITableColumn): HTMLDivElement {
         const cell = document.createElement("div");
         cell.className = "skiba-table__cell";
@@ -2670,6 +3006,11 @@ export class TableRenderer {
             }
         }
 
+        const tier4Color = this.tier4CellColor(col.name, rawValue);
+        if (tier4Color) {
+            cell.style.backgroundColor = tier4Color;
+            cell.style.color = "#26320a";
+        }
         if (this.settings.enableDataBars && col.isMeasure && typeof rawValue === "number") {
             const maxAbs = this.columnStatsMax(col.name);
             if (maxAbs > 0) {
@@ -3007,7 +3348,7 @@ export class TableRenderer {
         );
         const csv = d3.csvFormatRows([header, ...rows]);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        this.downloadBlob(blob, "skiba-tables-export.csv");
+        this.downloadBlob(blob, "data-lake-tables-export.csv");
         recordExportAudit(createExportAuditEvent("csv", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
     }
 
@@ -3032,7 +3373,7 @@ export class TableRenderer {
         XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
         const wbout: ArrayBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
         const blob = new Blob([wbout], { type: "application/octet-stream" });
-        this.downloadBlob(blob, "skiba-tables-export.xlsx");
+        this.downloadBlob(blob, "data-lake-tables-export.xlsx");
         recordExportAudit(createExportAuditEvent("excel", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
     }
 
@@ -3142,7 +3483,7 @@ export class TableRenderer {
             doc.text(watermark, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 18, { align: "center" });
         }
         recordExportAudit(createExportAuditEvent("pdf", this.settings.exportGovernance?.username || "unknown", this._filteredData.length));
-        doc.save("skiba-tables-export.pdf");
+        doc.save("data-lake-tables-export.pdf");
     }
 
     private downloadBlob(blob: Blob, filename: string): void {
@@ -3188,7 +3529,7 @@ export class TableRenderer {
      * Landing / Welcome Page (item 15): shown only before any fields have ever been
      * assigned to the visual (distinct from renderEmptyState above). Reuses the existing
      * `.skiba-empty-state` branding classes rather than a second, inconsistent design, with
-     * an added plain-language description of what Skiba Tables does.
+     * an added plain-language description of what Data Lake Tables does.
      */
     public renderLandingPage(): void {
         this.clearElement(this.container);
@@ -3197,12 +3538,12 @@ export class TableRenderer {
 
         const brand = document.createElement("div");
         brand.className = "skiba-empty-state__brand";
-        brand.textContent = this.loc("Landing_Brand", "SKIBA ANALYTICS");
+        brand.textContent = this.loc("Landing_Brand", "DATA LAKE TABLES");
         wrap.appendChild(brand);
 
         const tagline = document.createElement("div");
         tagline.className = "skiba-empty-state__tagline";
-        tagline.textContent = this.loc("Landing_Tagline", "Skiba Tables");
+        tagline.textContent = this.loc("Landing_Tagline", "Datalake intelligence for accountable decisions");
         wrap.appendChild(tagline);
 
         const description = document.createElement("div");

@@ -1,26 +1,51 @@
 {
-    "visual": {
-        "name": "SkibaTables",
-        "displayName": "Skiba Tables",
-        "guid": "skibaTables_b1d4d5435f2c4e7a8f9b0a1b2c3d4e5f",
-        "visualClassName": "SkibaTables",
-        "version": "1.0.0.1",
-        "description": "The fastest, cleanest, most intuitive way to view, slice, and export your Power BI data — without enterprise bloat.",
-        "supportUrl": "https://www.skibaanalytics.com/support",
-        "gitHubUrl": ""
-    },
-    "apiVersion": "5.3.0",
-    "author": {
-        "name": "Skiba Analytics",
-        "email": "hello@skibaanalytics.com"
-    },
-    "assets": {
-        "icon": "assets/icon.png"
-    },
-    "externalJS": [],
-    "style": "style/visual.less",
-    "capabilities": "capabilities.json",
-    "stringResources": [
-        "stringResources/en-US/resources.resjson"
-    ]
+
+  "visual": {
+
+    "name": "DataLakeTables",
+
+    "displayName": "Data Lake Tables",
+
+    "guid": "dataLakeTables_829db169be4645b3be514812e0d84f30",
+
+    "visualClassName": "DataLakeTables",
+
+    "version": "1.0.0.1",
+
+    "description": "A modern, scalable data-lake table visual for viewing, slicing, formatting, and exporting governed Power BI data.",
+
+    "supportUrl": "https://www.skibaanalytics.com/support",
+
+    "gitHubUrl": ""
+
+  },
+
+  "apiVersion": "5.3.0",
+
+  "author": {
+
+    "name": "Skiba Analytics",
+
+    "email": "hello@skibaanalytics.com"
+
+  },
+
+  "assets": {
+
+    "icon": "assets/icon.png"
+
+  },
+
+  "externalJS": [],
+
+  "style": "style/visual.less",
+
+  "capabilities": "capabilities.json",
+
+  "stringResources": [
+
+    "stringResources/en-US/resources.resjson"
+
+  ]
+
 }

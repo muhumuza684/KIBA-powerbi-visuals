@@ -48,7 +48,7 @@ jobs:
       - name: Upload as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skiba-tables-pbiviz
+          name: data-lake-tables-pbiviz
           path: dist/*.pbiviz
           retention-days: 30
 
@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Latest build
-          body: Auto-built from the latest push to main. Not a stable/versioned release — just the newest working .pbiviz.
+          name: Latest Data Lake Tables build
+          body: Auto-built Data Lake Tables package from the latest push to main. Not a stable/versioned release — just the newest working .pbiviz.
           files: dist/*.pbiviz
           make_latest: true
         env:
