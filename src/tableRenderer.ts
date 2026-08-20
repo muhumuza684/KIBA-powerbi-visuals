@@ -22,7 +22,17 @@ import {
     CalcValue
 } from "./calcEngine";
 import { selectColumnsForWidth } from "./mobileLayout";
-import { colorForTier4Value, ITier4ConditionalRule, ITier4SavedTheme, paletteColors, Tier4PaletteName, safeTier4Theme } from "./tier4Formatting";
+import {
+    colorForTier4Value,
+    deriveGradientFromPalette,
+    ITier4ConditionalRule,
+    ITier4SavedTheme,
+    normalizeHex,
+    parseCustomPalette,
+    Tier4PaletteName,
+    TIER4_PALETTE_SWATCHES,
+    safeTier4ThemeList
+} from "./tier4Formatting";
 import { buildWatermarkText, createExportAuditEvent, formatLocaleNumber, recordExportAudit } from "./tier4Governance";
 
 /** A single logical column: a plain row dimension, a value measure, a tooltip-only field, or a user-defined virtual column. */
@@ -151,17 +161,33 @@ type RenderNode =
 
 const ROW_BUFFER = 6; // extra rows rendered above/below viewport to avoid flicker while scrolling
 
-/** Data Lake Tables palettes. Every preset is wired to live conditional-format colors. */
-const DLT_PALETTE_PRESETS: Array<{ name: string; label: string; min: string; max: string }> = [
-    { name: "default", label: "Standard", min: "#DFFF91", max: "#0B3A70" },
-    { name: "deuteranopia", label: "Deuteranopia safe", min: "#FDE725", max: "#440154" },
-    { name: "protanopia", label: "Protanopia safe", min: "#FDE725", max: "#31688E" },
-    { name: "ura", label: "URA navy and yellow", min: "#FFF4A3", max: "#0B3A70" },
-    { name: "ocean", label: "Ocean blue", min: "#D9F3FF", max: "#075985" },
-    { name: "teal", label: "Teal operations", min: "#CCFBF1", max: "#115E59" },
-    { name: "highContrast", label: "High contrast", min: "#FFFFFF", max: "#000000" }
+/** Short random id suffix for a saved theme. Uses crypto.getRandomValues rather than Math.random --
+ *  Power BI's certification linter (powerbi-visuals/insecure-random) flags Math.random as an error. */
+function generateThemeIdSuffix(): string {
+    const bytes = new Uint8Array(6);
+    (window.crypto ?? (globalThis as any).crypto).getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(36)).join("").slice(0, 8);
+}
+
+/**
+ * Data Lake Tables palettes. Every fixed preset's [min, max] gradient is derived (light -> dark)
+ * from its full swatch list via `deriveGradientFromPalette`, so the data-bar/conditional-format
+ * gradient and the categorical swatches always agree. "custom" is populated at runtime from
+ * whatever a user pastes into the Custom palette box.
+ */
+const DLT_PALETTE_PRESETS: Array<{ name: Tier4PaletteName | "ura" | "ocean" | "teal" | "highContrast"; label: string; swatches: string[] }> = [
+    { name: "default", label: "Standard", swatches: TIER4_PALETTE_SWATCHES.default },
+    { name: "deuteranopia", label: "Deuteranopia safe", swatches: TIER4_PALETTE_SWATCHES.deuteranopia },
+    { name: "protanopia", label: "Protanopia safe", swatches: TIER4_PALETTE_SWATCHES.protanopia },
+    { name: "brand", label: "Brand palette", swatches: TIER4_PALETTE_SWATCHES.brand },
+    { name: "ura", label: "URA navy and yellow", swatches: ["#FFF4A3", "#0B3A70"] },
+    { name: "ocean", label: "Ocean blue", swatches: ["#D9F3FF", "#075985"] },
+    { name: "teal", label: "Teal operations", swatches: ["#CCFBF1", "#115E59"] },
+    { name: "highContrast", label: "High contrast", swatches: ["#FFFFFF", "#000000"] }
 ];
 const DLT_PALETTE_NAMES = DLT_PALETTE_PRESETS.map((preset) => preset.name);
+/** The full set of selectable palette identifiers, including the runtime-populated "custom" slot. */
+type DltPaletteName = (typeof DLT_PALETTE_PRESETS)[number]["name"] | "custom";
 const GROUP_SEP = "\u241F"; // unit separator — safe delimiter for building unique group path keys
 
 /**
@@ -225,8 +251,15 @@ export class TableRenderer {
     private _sparklineColumns: Set<string> = new Set();
     private _tier4Rules: ITier4ConditionalRule[] = [];
     private _tier4ColumnColors: Map<string, string> = new Map();
-    private _tier4Palette: Tier4PaletteName = "default";
-    private _tier4SavedTheme: ITier4SavedTheme | null = null;
+    private _tier4Palette: DltPaletteName = "default";
+    /** Hex colors most recently pasted into the "Custom palette" box (validated, deduped, capped at 12). */
+    private _tier4CustomPalette: string[] = [];
+    /** Every user-saved theme (header/cell/accent bundle), click-to-apply. No author/viewer hierarchy --
+     *  every user gets the same flat gallery and picks freely; each user's active pick is stored separately
+     *  as part of their own persisted config, not this list. */
+    private _tier4SavedThemes: ITier4SavedTheme[] = [];
+    /** id of the theme currently applied by THIS user, or null if they're on the report's plain default. */
+    private _tier4ActiveThemeId: string | null = null;
     // Item 2: drag-to-pivot — the single row column currently promoted to a group-by, if any
     private _dragGroupColumn: ITableColumn | null = null;
     // Item 5: true drill-down — leaf rows whose full-record detail sub-grid is expanded (keyed by ITableRow.key).
@@ -839,7 +872,9 @@ export class TableRenderer {
             tier4Rules: this._tier4Rules,
             tier4ColumnColors: Object.fromEntries(this._tier4ColumnColors.entries()),
             tier4Palette: this._tier4Palette,
-            tier4SavedTheme: this._tier4SavedTheme,
+            tier4CustomPalette: this._tier4CustomPalette,
+            tier4SavedThemes: this._tier4SavedThemes,
+            tier4ActiveThemeId: this._tier4ActiveThemeId,
             layout: { fontSize: this.settings.fontSize, rowHeight: this.settings.rowHeight, headerBold: this.settings.headerBold },
         };
 
@@ -891,8 +926,16 @@ export class TableRenderer {
             if (state.tier4ColumnColors && typeof state.tier4ColumnColors === "object") {
                 Object.entries(state.tier4ColumnColors).forEach(([k, v]) => { if (typeof v === "string") this._tier4ColumnColors.set(k, v); });
             }
-            if (typeof state.tier4Palette === "string" && DLT_PALETTE_NAMES.includes(state.tier4Palette)) this._tier4Palette = state.tier4Palette as Tier4PaletteName;
-            this._tier4SavedTheme = safeTier4Theme(state.tier4SavedTheme);
+            if (typeof state.tier4Palette === "string" && (DLT_PALETTE_NAMES.includes(state.tier4Palette) || state.tier4Palette === "custom")) {
+                this._tier4Palette = state.tier4Palette as DltPaletteName;
+            }
+            if (Array.isArray(state.tier4CustomPalette)) {
+                const normalized = state.tier4CustomPalette.map((v: unknown) => (typeof v === "string" ? normalizeHex(v) : null)).filter((v: string | null): v is string => v !== null);
+                if (normalized.length > 0) this._tier4CustomPalette = normalized.slice(0, 12);
+            }
+            // Accepts either the new gallery array shape or the old single-theme object shape (pre-upgrade reports).
+            this._tier4SavedThemes = safeTier4ThemeList(state.tier4SavedThemes ?? state.tier4SavedTheme);
+            if (typeof state.tier4ActiveThemeId === "string") this._tier4ActiveThemeId = state.tier4ActiveThemeId;
             if (state.layout && typeof state.layout === "object") {
                 if (typeof state.layout.fontSize === "number") this.settings.fontSize = Math.max(9, Math.min(24, state.layout.fontSize));
                 if (typeof state.layout.rowHeight === "number") { this.settings.rowHeight = Math.max(22, Math.min(64, state.layout.rowHeight)); this.defaultRowHeight = this.settings.rowHeight; }
@@ -1014,27 +1057,86 @@ export class TableRenderer {
         const paletteRow = document.createElement("div");
         paletteRow.className = "skiba-format-editor__palette-row";
         const paletteLabel = document.createElement("span");
-        paletteLabel.textContent = this.loc("Toolbar_ColorPalette", "Palette");
+        paletteLabel.textContent = this.loc("Toolbar_ColorPalette", "Data palette (used for data bars & conditional colors)");
         paletteRow.appendChild(paletteLabel);
+        const paletteButtons = document.createElement("div");
+        paletteButtons.className = "skiba-format-editor__palette-buttons";
         DLT_PALETTE_PRESETS.forEach((preset) => {
             const name = preset.name;
+            const [minColor, maxColor] = deriveGradientFromPalette(preset.swatches);
             const button = document.createElement("button");
             button.type = "button";
             button.className = "skiba-format-editor__palette-button";
             button.dataset.palette = name;
-            button.textContent = preset.label;
             button.setAttribute("aria-pressed", String(this._tier4Palette === name));
+            const swatchPreview = document.createElement("span");
+            swatchPreview.className = "skiba-format-editor__palette-preview";
+            swatchPreview.style.background = `linear-gradient(90deg, ${minColor}, ${maxColor})`;
+            button.appendChild(swatchPreview);
+            button.appendChild(document.createTextNode(preset.label));
             button.addEventListener("click", () => {
-                this._tier4Palette = name as Tier4PaletteName;
-                const colors = [preset.min, preset.max] as [string, string];
-                this.settings.conditionalFormatMinColor = colors[0];
-                this.settings.conditionalFormatMaxColor = colors[1];
+                this._tier4Palette = name;
+                this.settings.conditionalFormatMinColor = minColor;
+                this.settings.conditionalFormatMaxColor = maxColor;
                 this.persistUserConfig();
                 this.renderVisibleRows();
                 this.renderToolbar();
             });
-            paletteRow.appendChild(button);
+            paletteButtons.appendChild(button);
         });
+        paletteRow.appendChild(paletteButtons);
+
+        // "Custom" palette: paste a CSV list or a JSON array of hex colors (same shapes exported
+        // by most design tools, e.g. "faf623,eaec4a,..." or ["faf623","eaec4a",...]).
+        const customRow = document.createElement("div");
+        customRow.className = "skiba-format-editor__custom-palette";
+        const customInput = document.createElement("input");
+        customInput.type = "text";
+        customInput.className = "skiba-format-editor__input";
+        customInput.placeholder = this.loc("Toolbar_CustomPalettePlaceholder", "Paste hex colors, e.g. faf623,eaec4a,124e9b");
+        customInput.setAttribute("aria-label", this.loc("Toolbar_CustomPalette", "Custom palette"));
+        if (this._tier4CustomPalette.length > 0) customInput.value = this._tier4CustomPalette.join(",");
+        customRow.appendChild(customInput);
+
+        const customApply = document.createElement("button");
+        customApply.type = "button";
+        customApply.className = "skiba-format-editor__button";
+        customApply.textContent = this.loc("Toolbar_ApplyCustomPalette", "Use custom palette");
+        const customError = document.createElement("div");
+        customError.className = "skiba-format-editor__error";
+        customError.setAttribute("role", "alert");
+        customApply.addEventListener("click", () => {
+            customError.textContent = "";
+            const parsed = parseCustomPalette(customInput.value);
+            if (!parsed) {
+                customError.textContent = this.loc("Toolbar_CustomPaletteError", "Enter at least one valid hex color (e.g. faf623 or #faf623).");
+                return;
+            }
+            this._tier4CustomPalette = parsed;
+            this._tier4Palette = "custom";
+            const [minColor, maxColor] = deriveGradientFromPalette(parsed);
+            this.settings.conditionalFormatMinColor = minColor;
+            this.settings.conditionalFormatMaxColor = maxColor;
+            this.persistUserConfig();
+            this.renderVisibleRows();
+            this.renderToolbar();
+        });
+        customRow.appendChild(customApply);
+        customRow.appendChild(customError);
+        if (this._tier4CustomPalette.length > 0) {
+            const preview = document.createElement("div");
+            preview.className = "skiba-format-editor__custom-palette-preview";
+            preview.setAttribute("aria-pressed", String(this._tier4Palette === "custom"));
+            this._tier4CustomPalette.forEach((hex) => {
+                const chip = document.createElement("span");
+                chip.className = "skiba-format-editor__swatch";
+                chip.style.backgroundColor = hex;
+                chip.title = hex;
+                preview.appendChild(chip);
+            });
+            customRow.appendChild(preview);
+        }
+        paletteRow.appendChild(customRow);
         section.appendChild(paletteRow);
 
         const ruleBuilder = document.createElement("div");
@@ -1149,6 +1251,7 @@ export class TableRenderer {
             const input = document.createElement("input");
             input.type = "color";
             input.value = this._tier4ColumnColors.get(c.name) ?? "#FFFFFF";
+            input.title = this.loc("Toolbar_ColumnColorHint", "Click to pick a background color for this column");
             input.setAttribute("aria-label", `Color override for ${c.displayName}`);
             input.addEventListener("change", () => {
                 if (input.value.toUpperCase() === "#FFFFFF") this._tier4ColumnColors.delete(c.name);
@@ -1160,6 +1263,8 @@ export class TableRenderer {
             overrides.appendChild(row);
         });
         section.appendChild(overrides);
+
+        this.renderThemeGallerySection(section);
 
         const actions = document.createElement("div");
         actions.className = "skiba-format-editor__actions";
@@ -1175,18 +1280,6 @@ export class TableRenderer {
             this.renderToolbar();
         });
         actions.appendChild(reset);
-        const saveTheme = document.createElement("button");
-        saveTheme.type = "button";
-        saveTheme.textContent = this.loc("Toolbar_SaveTheme", "Save theme");
-        saveTheme.addEventListener("click", () => {
-            const name = window.prompt(this.loc("Toolbar_ThemeName", "Theme name"), this._tier4SavedTheme?.name ?? "Operations");
-            if (name && name.trim()) {
-                this._tier4SavedTheme = { name: name.trim(), palette: this._tier4Palette };
-                this.persistUserConfig();
-                this.renderToolbar();
-            }
-        });
-        actions.appendChild(saveTheme);
         const close = document.createElement("button");
         close.type = "button";
         close.textContent = this.loc("Toolbar_Done", "Done");
@@ -1194,6 +1287,150 @@ export class TableRenderer {
         actions.appendChild(close);
         section.appendChild(actions);
         menu.appendChild(section);
+    }
+
+    /** Applies a saved theme's header/cell/accent colors as this user's active choice, or clears back to
+     *  the report's plain built-in colors when `theme` is null. No author/viewer precedence: this is the
+     *  same action available to every user, and it only ever affects what this user sees. */
+    private applyTier4Theme(theme: ITier4SavedTheme | null): void {
+        this._tier4ActiveThemeId = theme ? theme.id : null;
+        if (theme) {
+            if (theme.headerBg) this.settings.headerBg = theme.headerBg;
+            if (theme.headerFont) this.settings.headerFont = theme.headerFont;
+            if (theme.cellBg) this.settings.cellBg = theme.cellBg;
+            if (theme.cellFont) this.settings.cellFont = theme.cellFont;
+            if (theme.altRow) this.settings.altRow = theme.altRow;
+            if (theme.accent) this.settings.barColor = theme.accent;
+        }
+        this.applyThemeVars();
+        this.renderHeader();
+        this.renderVisibleRows();
+        this.persistUserConfig();
+        this.renderToolbar();
+    }
+
+    /**
+     * One-click visual theme gallery (header/cell/accent bundles), independent of the data
+     * palette above. Every user — not just the report author — sees the same flat list and can
+     * apply, save their own, or delete their own. Backed by `_tier4SavedThemes` /
+     * `_tier4ActiveThemeId`, persisted per-user via `persistUserConfig`.
+     */
+    private renderThemeGallerySection(section: HTMLElement): void {
+        const heading = document.createElement("div");
+        heading.className = "skiba-format-editor__label";
+        heading.textContent = this.loc("Toolbar_VisualTheme", "Visual theme (header, cells & accent — anyone can pick one)");
+        section.appendChild(heading);
+
+        const gallery = document.createElement("div");
+        gallery.className = "skiba-format-editor__theme-gallery";
+
+        const defaultCard = document.createElement("button");
+        defaultCard.type = "button";
+        defaultCard.className = "skiba-format-editor__theme-card";
+        defaultCard.setAttribute("aria-pressed", String(this._tier4ActiveThemeId === null));
+        const defaultPreview = document.createElement("span");
+        defaultPreview.className = "skiba-format-editor__theme-card-preview";
+        defaultPreview.style.background = "linear-gradient(135deg, #0B3A70, #DFFF91)";
+        defaultCard.appendChild(defaultPreview);
+        const defaultLabel = document.createElement("span");
+        defaultLabel.textContent = this.loc("Toolbar_ThemeDefault", "Default");
+        defaultCard.appendChild(defaultLabel);
+        defaultCard.addEventListener("click", () => {
+            this.settings.headerBg = "#0B3A70";
+            this.settings.headerFont = "#FFFFFF";
+            this.settings.cellBg = "#FFFFFF";
+            this.settings.cellFont = "#1A2B1A";
+            this.settings.altRow = "#F5F8EE";
+            this.settings.barColor = "#6F9122";
+            this.applyTier4Theme(null);
+        });
+        gallery.appendChild(defaultCard);
+
+        this._tier4SavedThemes.forEach((theme) => {
+            const card = document.createElement("div");
+            card.className = "skiba-format-editor__theme-card-wrap";
+            const applyBtn = document.createElement("button");
+            applyBtn.type = "button";
+            applyBtn.className = "skiba-format-editor__theme-card";
+            applyBtn.setAttribute("aria-pressed", String(this._tier4ActiveThemeId === theme.id));
+            const preview = document.createElement("span");
+            preview.className = "skiba-format-editor__theme-card-preview";
+            preview.style.background = `linear-gradient(135deg, ${theme.headerBg ?? "#0B3A70"}, ${theme.accent ?? theme.cellBg ?? "#DFFF91"})`;
+            applyBtn.appendChild(preview);
+            const label = document.createElement("span");
+            label.textContent = theme.name;
+            applyBtn.appendChild(label);
+            applyBtn.addEventListener("click", () => this.applyTier4Theme(theme));
+            card.appendChild(applyBtn);
+
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "skiba-format-editor__icon-button";
+            remove.textContent = "×";
+            remove.title = this.loc("Toolbar_DeleteTheme", "Delete theme");
+            remove.setAttribute("aria-label", `${this.loc("Toolbar_DeleteTheme", "Delete theme")}: ${theme.name}`);
+            remove.addEventListener("click", () => {
+                this._tier4SavedThemes = this._tier4SavedThemes.filter((t) => t.id !== theme.id);
+                if (this._tier4ActiveThemeId === theme.id) this._tier4ActiveThemeId = null;
+                this.persistUserConfig();
+                this.renderToolbar();
+            });
+            card.appendChild(remove);
+            gallery.appendChild(card);
+        });
+        section.appendChild(gallery);
+
+        // "Save current as new theme" — captures whatever header/cell/accent colors are live
+        // right now (whether from the Format pane, a previous theme, or manual tweaks) as a new
+        // reusable card, rather than the old one-shot prompt that saved nothing usable.
+        const saveRow = document.createElement("div");
+        saveRow.className = "skiba-format-editor__save-theme-row";
+        const saveToggle = document.createElement("button");
+        saveToggle.type = "button";
+        saveToggle.className = "skiba-format-editor__button";
+        saveToggle.textContent = this.loc("Toolbar_SaveCurrentTheme", "+ Save current colors as theme");
+        const saveForm = document.createElement("div");
+        saveForm.className = "skiba-calc-form";
+        saveForm.style.display = "none";
+        const nameInput = document.createElement("input");
+        nameInput.type = "text";
+        nameInput.className = "skiba-calc-form__input";
+        nameInput.placeholder = this.loc("Toolbar_ThemeName", "Theme name, e.g. Field Operations");
+        nameInput.setAttribute("aria-label", this.loc("Toolbar_ThemeName", "Theme name"));
+        saveForm.appendChild(nameInput);
+        const saveConfirm = document.createElement("button");
+        saveConfirm.type = "button";
+        saveConfirm.className = "skiba-toolbar__button skiba-toolbar__button--primary";
+        saveConfirm.textContent = this.loc("Toolbar_Save", "Save");
+        saveConfirm.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            const name = nameInput.value.trim();
+            if (!name) return;
+            const theme: ITier4SavedTheme = {
+                id: `theme_${Date.now()}_${generateThemeIdSuffix()}`,
+                name,
+                headerBg: this.settings.headerBg,
+                headerFont: this.settings.headerFont,
+                cellBg: this.settings.cellBg,
+                cellFont: this.settings.cellFont,
+                altRow: this.settings.altRow,
+                accent: this.settings.barColor
+            };
+            this._tier4SavedThemes.push(theme);
+            this._tier4ActiveThemeId = theme.id;
+            nameInput.value = "";
+            saveForm.style.display = "none";
+            this.persistUserConfig();
+            this.renderToolbar();
+        });
+        saveForm.appendChild(saveConfirm);
+        saveToggle.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            saveForm.style.display = saveForm.style.display === "none" ? "block" : "none";
+        });
+        saveRow.appendChild(saveToggle);
+        saveRow.appendChild(saveForm);
+        section.appendChild(saveRow);
     }
     /** The group-by columns actually used for grouping: the real "Group by" role, plus any drag-pivoted column first. */
     private effectiveGroupColumns(): ITableColumn[] {

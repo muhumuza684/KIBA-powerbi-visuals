@@ -866,7 +866,10 @@
 .skiba-format-editor__empty { padding: 9px; border-radius: 8px; background: rgba(255,255,255,.46); color: #778454; font-size: 11px; }
 .skiba-format-editor__overrides { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; max-height: 190px; overflow-y: auto; }
 .skiba-format-editor__override { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.62); color: #52602d; font-size: 11px; }
-.skiba-format-editor__override input { width: 27px; height: 24px; padding: 1px; border: 0; background: transparent; }
+/* Fixed: this used to render `background: transparent; border: 0`, which made an unset (white)
+   color override look like a blank checkbox instead of a color swatch. A visible border and
+   rounded corners make it read as a color picker at every value, not just non-default ones. */
+.skiba-format-editor__override input { width: 27px; height: 24px; padding: 1px; border: 1px solid rgba(52,71,0,.35); border-radius: 5px; background: #fff; cursor: pointer; }
 .skiba-high-contrast .skiba-format-editor { background: Canvas; color: CanvasText; box-shadow: none; }
 /* Data Lake Tables standardized settings surface. */
 .datalake-tables-settings-menu { max-height: min(760px, calc(100% - 16px)); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #8aaa31 #efffc9; padding-right: 6px; }
@@ -989,13 +992,26 @@
 /* Data Lake Tables controls and palette completion */
 .datalake-tables-settings-menu .skiba-format-editor__palette-row { align-items: stretch; }
 .datalake-tables-settings-menu .skiba-format-editor__palette-button { flex: 1 1 130px; min-width: 118px; min-height: 38px; white-space: normal; line-height: 1.2; }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button::before { content: ""; display: inline-block; width: 24px; height: 8px; margin-right: 5px; vertical-align: middle; border-radius: 5px; background: linear-gradient(90deg,#fff4a3,#0b3a70); }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[data-palette="deuteranopia"]::before { background: linear-gradient(90deg,#fde725,#440154); }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[data-palette="protanopia"]::before { background: linear-gradient(90deg,#fde725,#31688e); }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[data-palette="ocean"]::before { background: linear-gradient(90deg,#d9f3ff,#075985); }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[data-palette="teal"]::before { background: linear-gradient(90deg,#ccfbf1,#115e59); }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[data-palette="highContrast"]::before { background: linear-gradient(90deg,#fff,#000); border: 1px solid #102a43; }
 .datalake-tables-settings-menu .datalake-layout-control input[type="range"] { height: 20px; cursor: ew-resize; }
 .datalake-tables-settings-menu .datalake-layout-control output { min-width: 32px; padding: 3px 5px; border-radius: 5px; background: #e8f4fa; color: #0b3a70; }
 .datalake-tables-settings-menu .skiba-toolbar__button { display: block; width: 100%; min-height: 34px; margin: 5px 0; padding: 8px 10px; text-align: left; cursor: pointer; }
 .datalake-tables-settings-menu .skiba-toolbar__button:hover, .datalake-tables-settings-menu .skiba-toolbar__button:focus-visible { border-color: #1f5fae; background: #e6f5fb; outline: 2px solid rgba(31,95,174,.22); outline-offset: 1px; }
+/* Data Lake Tables: data palette gradient previews, custom palette input, and the
+   one-click visual theme gallery (header/cell/accent bundles, independent of the
+   data palette above). Every user gets the same flat gallery -- no author/viewer
+   precedence -- so these styles don't distinguish between the two. */
+.skiba-format-editor__palette-buttons { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.skiba-format-editor__palette-preview { display: inline-block; width: 26px; height: 10px; margin-right: 6px; vertical-align: middle; border-radius: 5px; border: 1px solid rgba(0,0,0,.15); }
+.skiba-format-editor__custom-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; margin-top: 8px; }
+.skiba-format-editor__custom-palette .skiba-format-editor__input { flex: 1 1 220px; }
+.skiba-format-editor__custom-palette-preview { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
+.skiba-format-editor__button { padding: 7px 9px; border: 1px solid rgba(52,71,0,.18); border-radius: 9px; background: #fff; color: #344700; cursor: pointer; font-size: 11px; font-weight: 700; }
+.skiba-format-editor__button:hover { background: #e6f5fb; }
+.skiba-format-editor__error { width: 100%; color: #a1281c; font-size: 10px; }
+.skiba-format-editor__theme-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; width: 100%; margin: 6px 0; }
+.skiba-format-editor__theme-card-wrap { position: relative; }
+.skiba-format-editor__theme-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; padding: 8px; border: 1px solid rgba(52,71,0,.2); border-radius: 10px; background: #fff; color: #344700; cursor: pointer; font-size: 11px; font-weight: 700; text-align: left; }
+.skiba-format-editor__theme-card[aria-pressed="true"] { border-color: var(--dlt-navy, #0b3a70); box-shadow: 0 0 0 2px rgba(11,58,112,.35); }
+.skiba-format-editor__theme-card-preview { display: block; width: 100%; height: 26px; border-radius: 6px; }
+.skiba-format-editor__theme-card-wrap .skiba-format-editor__icon-button { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,.85); border-radius: 50%; }
+.skiba-format-editor__save-theme-row { width: 100%; margin-top: 6px; }
