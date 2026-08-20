@@ -1178,7 +1178,7 @@ export class TableRenderer {
         const color = document.createElement("input");
         color.className = "skiba-format-editor__color";
         color.type = "color";
-        color.value = "#DFFF91";
+        color.value = "#FAF623";
         color.setAttribute("aria-label", this.loc("Toolbar_RuleColor", "Rule color"));
         ruleBuilder.appendChild(color);
 
@@ -1330,18 +1330,18 @@ export class TableRenderer {
         defaultCard.setAttribute("aria-pressed", String(this._tier4ActiveThemeId === null));
         const defaultPreview = document.createElement("span");
         defaultPreview.className = "skiba-format-editor__theme-card-preview";
-        defaultPreview.style.background = "linear-gradient(135deg, #0B3A70, #DFFF91)";
+        defaultPreview.style.background = "linear-gradient(135deg, #124E9B, #FAF623)";
         defaultCard.appendChild(defaultPreview);
         const defaultLabel = document.createElement("span");
         defaultLabel.textContent = this.loc("Toolbar_ThemeDefault", "Default");
         defaultCard.appendChild(defaultLabel);
         defaultCard.addEventListener("click", () => {
-            this.settings.headerBg = "#0B3A70";
+            this.settings.headerBg = "#124E9B";
             this.settings.headerFont = "#FFFFFF";
             this.settings.cellBg = "#FFFFFF";
             this.settings.cellFont = "#1A2B1A";
             this.settings.altRow = "#F5F8EE";
-            this.settings.barColor = "#6F9122";
+            this.settings.barColor = "#3089BB";
             this.applyTier4Theme(null);
         });
         gallery.appendChild(defaultCard);
@@ -1355,7 +1355,7 @@ export class TableRenderer {
             applyBtn.setAttribute("aria-pressed", String(this._tier4ActiveThemeId === theme.id));
             const preview = document.createElement("span");
             preview.className = "skiba-format-editor__theme-card-preview";
-            preview.style.background = `linear-gradient(135deg, ${theme.headerBg ?? "#0B3A70"}, ${theme.accent ?? theme.cellBg ?? "#DFFF91"})`;
+            preview.style.background = `linear-gradient(135deg, ${theme.headerBg ?? "#124E9B"}, ${theme.accent ?? theme.cellBg ?? "#FAF623"})`;
             applyBtn.appendChild(preview);
             const label = document.createElement("span");
             label.textContent = theme.name;
@@ -3772,6 +3772,10 @@ export class TableRenderer {
         this.clearElement(this.container);
         const wrap = document.createElement("div");
         wrap.className = "skiba-empty-state skiba-landing-page";
+
+        const mark = document.createElement("div");
+        mark.className = "skiba-landing-page__mark";
+        wrap.appendChild(mark);
 
         const brand = document.createElement("div");
         brand.className = "skiba-empty-state__brand";

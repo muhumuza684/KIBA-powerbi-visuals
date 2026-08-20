@@ -799,47 +799,59 @@
     }
 }
 
-/* Skiba landing page: bright blue theme (scoped to first-load welcome screen only). */
+/* Data Lake Tables landing page — single, final ruleset (brand navy/yellow identity).
+   Standard product-splash layout: mark, product name, headline, one-line description,
+   solid CTA. No decorative filler shapes. */
 .skiba-empty-state.skiba-landing-page {
     position: relative;
     box-sizing: border-box;
     width: 100%;
     min-height: 100%;
-    padding: 34px 32px;
-    overflow: hidden;
-    color: #eaf3ff;
-    background: radial-gradient(circle at 85% 12%, rgba(255,255,255,.18), transparent 40%), linear-gradient(135deg, #0d3b8c 0%, #1258c9 48%, #2f7de0 100%);
-    border: 1px solid rgba(255,255,255,.14);
-    border-radius: 18px;
-    box-shadow: 0 20px 46px rgba(9,30,74,.35);
-    text-align: left;
-}
-.skiba-landing-page.skiba-empty-state::before,
-.skiba-landing-page.skiba-empty-state::after {
-    content: "";
-    position: absolute;
+    padding: 36px 34px;
+    color: var(--dlt-ink);
+    background: linear-gradient(180deg, #ffffff 0%, var(--dlt-surface) 100%);
+    border: 1px solid rgba(18,78,155,.16);
     border-radius: 14px;
-    background: rgba(255,255,255,.12);
-    border: 1px solid rgba(255,255,255,.22);
-    box-shadow: 0 18px 40px rgba(6,20,52,.3);
-    pointer-events: none;
+    box-shadow: 0 10px 28px rgba(18,78,155,.10);
+    text-align: left;
+    align-items: flex-start;
+    justify-content: center;
 }
-.skiba-landing-page.skiba-empty-state::before { width: 150px; height: 96px; top: 22%; right: 6%; transform: rotate(-6deg); }
-.skiba-landing-page.skiba-empty-state::after { width: 150px; height: 96px; top: 34%; right: 3%; transform: rotate(4deg); background: rgba(255,255,255,.18); }
+.skiba-landing-page__mark {
+    width: 34px;
+    height: 6px;
+    margin-bottom: 16px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--dlt-navy), var(--dlt-yellow));
+}
 .skiba-landing-page .skiba-empty-state__brand {
-    display: inline-block;
-    margin: 0 0 8px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    background: rgba(255,255,255,.14);
-    color: #cfe3ff;
-    font-size: 10px;
+    display: block;
+    margin: 0 0 6px;
+    color: var(--dlt-navy);
+    font-size: 11px;
     font-weight: 800;
-    letter-spacing: .16em;
+    letter-spacing: .14em;
 }
-.skiba-landing-page .skiba-empty-state__tagline { margin: 0 0 12px; color: #ffffff; font-size: clamp(24px, 4vw, 38px); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
-.skiba-landing-page__description { max-width: 480px; margin: 0 0 22px; color: rgba(234,243,255,.82); font-size: 13px; line-height: 1.55; }
-.skiba-landing-page .skiba-empty-state__helper { display: inline-flex; margin: 4px 0 0; padding: 9px 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; background: #ffffff; color: #1258c9; font-size: 11px; font-weight: 750; }
+.skiba-landing-page .skiba-empty-state__tagline {
+    margin: 0 0 12px;
+    color: var(--dlt-ink);
+    font-size: clamp(20px, 3.2vw, 30px);
+    font-weight: 750;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+.skiba-landing-page__description { max-width: 460px; margin: 0 0 20px; color: #4a5f76; font-size: 13px; line-height: 1.55; }
+.skiba-landing-page .skiba-empty-state__helper {
+    display: inline-flex;
+    margin: 2px 0 0;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--dlt-navy);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+}
 .skiba-toolbar__menu { min-width: 260px; padding: 10px; border: 1px solid rgba(52,71,0,.16); border-radius: 14px; background: #fbfff4; box-shadow: 0 14px 34px rgba(37,52,0,.18); }
 .skiba-toolbar__section { margin-bottom: 10px; padding: 9px; border-radius: 10px; background: rgba(228,247,176,.42); }
 .skiba-toolbar__section-title { margin-bottom: 7px; color: #53651a; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -884,34 +896,29 @@
 .datalake-settings-secondary { width: 100%; padding: 7px 9px; border: 1px solid rgba(52,71,0,.2); border-radius: 9px; background: rgba(255,255,255,.72); color: #344700; cursor: pointer; font-size: 11px; font-weight: 700; }
 .datalake-settings-secondary:hover { background: #dfff91; }
 .skiba-format-editor { max-height: 580px; overflow-y: auto; }
-/* Data Lake Tables identity: URA-inspired navy, yellow, and sky-blue. */
-:root { --dlt-navy: #0b3a70; --dlt-blue: #1f5fae; --dlt-sky: #72cbe8; --dlt-yellow: #ffd400; --dlt-ink: #102a43; --dlt-surface: #f5f9fc; }
-.skiba-empty-state.skiba-landing-page, .skiba-empty-state.skiba-landing-page--modern { color: var(--dlt-ink); background: radial-gradient(circle at 82% 8%, rgba(114,203,232,.72), transparent 28%), linear-gradient(145deg,#ffffff 0%,#edf7fb 56%,#d9edf6 100%); border: 1px solid rgba(11,58,112,.18); box-shadow: 0 18px 44px rgba(11,58,112,.16); }
-.skiba-landing-page .skiba-empty-state__brand, .skiba-landing-page__brand { color: var(--dlt-navy); letter-spacing: -.045em; }
-.skiba-landing-page .skiba-empty-state__tagline, .skiba-landing-page__tagline { color: var(--dlt-blue); }
-.skiba-landing-page__description { color: #35536d; }
-.skiba-landing-page .skiba-empty-state__helper, .skiba-landing-page__helper { border-color: rgba(11,58,112,.22); background: rgba(255,255,255,.8); color: var(--dlt-navy); }
-.datalake-tables-settings-button { border-color: var(--dlt-navy); background: linear-gradient(135deg,var(--dlt-navy),var(--dlt-blue)); color: var(--dlt-yellow); box-shadow: 0 5px 16px rgba(11,58,112,.28); }
-.datalake-tables-settings-button:hover, .datalake-tables-settings-button:focus-visible { background: var(--dlt-navy); outline-color: rgba(255,212,0,.8); }
+/* Data Lake Tables identity: brand navy and yellow (matches the "Brand palette" preset). */
+:root { --dlt-navy: #124e9b; --dlt-blue: #3089bb; --dlt-sky: #9cd5d6; --dlt-yellow: #faf623; --dlt-ink: #102a43; --dlt-surface: #f5f9fc; }
+.datalake-tables-settings-button { border-color: var(--dlt-navy); background: linear-gradient(135deg,var(--dlt-navy),var(--dlt-blue)); color: var(--dlt-yellow); box-shadow: 0 5px 16px rgba(18,78,155,.28); }
+.datalake-tables-settings-button:hover, .datalake-tables-settings-button:focus-visible { background: var(--dlt-navy); outline-color: rgba(250,246,35,.8); }
 .datalake-tables-settings-menu { scrollbar-color: var(--dlt-blue) #e8f4fa; }
-.datalake-layout-section, .skiba-format-editor { background: linear-gradient(145deg,#ffffff,#eef8fc); border-color: rgba(11,58,112,.18); }
+.datalake-layout-section, .skiba-format-editor { background: linear-gradient(145deg,#ffffff,#eef8fc); border-color: rgba(18,78,155,.18); }
 .skiba-format-editor__palette-button[aria-pressed="true"], .skiba-format-editor__primary { background: var(--dlt-navy); color: var(--dlt-yellow); border-color: var(--dlt-navy); }
 .skiba-format-editor__palette-button:hover, .skiba-format-editor__actions button:hover, .datalake-settings-secondary:hover { background: #e6f5fb; border-color: var(--dlt-blue); }
-.skiba-format-editor__rule-card, .skiba-format-editor__override { background: rgba(255,255,255,.92); border-color: rgba(11,58,112,.14); }
+.skiba-format-editor__rule-card, .skiba-format-editor__override { background: rgba(255,255,255,.92); border-color: rgba(18,78,155,.14); }
 .skiba-format-editor__swatch { border-color: var(--dlt-navy); }
 
 /* Data Lake Tables consolidated UI fix */
-.datalake-tables-settings-button { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 2px solid #ffd400; border-radius: 10px; background: #0b3a70; color: #ffd400; font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-size: 21px; font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(11,58,112,.28); }
-.datalake-tables-settings-button:hover, .datalake-tables-settings-button:focus-visible { background: #1f5fae; outline: 3px solid rgba(255,212,0,.6); outline-offset: 2px; }
-.datalake-tables-settings-menu { box-sizing: border-box; width: min(390px, calc(100vw - 28px)); min-width: 300px; height: min(680px, 78vh); min-height: 300px; max-height: calc(100% - 14px); overflow-x: hidden; overflow-y: auto; padding: 12px; background: #f5f9fc; border: 1px solid rgba(11,58,112,.2); border-radius: 14px; scrollbar-width: thin; scrollbar-color: #1f5fae #d9edf6; }
-.datalake-tables-settings-menu .skiba-toolbar__section { display: block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 12px; border: 1px solid rgba(11,58,112,.15); border-radius: 12px; background: #ffffff; }
-.datalake-tables-settings-menu .skiba-toolbar__section-title { color: #0b3a70; font-size: 11px; font-weight: 800; letter-spacing: .08em; line-height: 1.25; text-transform: uppercase; }
+.datalake-tables-settings-button { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 2px solid #faf623; border-radius: 10px; background: #124e9b; color: #faf623; font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-size: 21px; font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(18,78,155,.28); }
+.datalake-tables-settings-button:hover, .datalake-tables-settings-button:focus-visible { background: #3089bb; outline: 3px solid rgba(250,246,35,.6); outline-offset: 2px; }
+.datalake-tables-settings-menu { box-sizing: border-box; width: min(390px, calc(100vw - 28px)); min-width: 300px; height: min(680px, 78vh); min-height: 300px; max-height: calc(100% - 14px); overflow-x: hidden; overflow-y: auto; padding: 12px; background: #f5f9fc; border: 1px solid rgba(18,78,155,.2); border-radius: 14px; scrollbar-width: thin; scrollbar-color: #3089bb #d9edf6; }
+.datalake-tables-settings-menu .skiba-toolbar__section { display: block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 12px; border: 1px solid rgba(18,78,155,.15); border-radius: 12px; background: #ffffff; }
+.datalake-tables-settings-menu .skiba-toolbar__section-title { color: #124e9b; font-size: 11px; font-weight: 800; letter-spacing: .08em; line-height: 1.25; text-transform: uppercase; }
 .datalake-tables-settings-menu .datalake-settings-help { color: #35536d; font-size: 11px; line-height: 1.4; }
 .datalake-tables-settings-menu .skiba-format-editor { display: block; width: 100%; max-height: none; min-height: 360px; overflow: visible; }
-.datalake-tables-settings-menu .skiba-format-editor__palette, .datalake-tables-settings-menu .skiba-format-editor__rule-builder, .datalake-tables-settings-menu .skiba-format-editor__active-rules, .datalake-tables-settings-menu .skiba-format-editor__overrides { display: block; width: 100%; margin: 10px 0; padding: 10px; box-sizing: border-box; border: 1px solid rgba(11,58,112,.13); border-radius: 10px; background: #f7fbfd; }
-.datalake-tables-settings-menu .skiba-format-editor button, .datalake-tables-settings-menu .datalake-settings-secondary { min-height: 30px; border: 1px solid #9bbbd2; border-radius: 7px; background: #ffffff; color: #0b3a70; cursor: pointer; font-size: 11px; font-weight: 700; }
-.datalake-tables-settings-menu .skiba-format-editor button:hover, .datalake-tables-settings-menu .datalake-settings-secondary:hover { background: #e7f5fb; border-color: #1f5fae; }
-.datalake-tables-settings-menu .skiba-format-editor__palette-button[aria-pressed="true"], .datalake-tables-settings-menu .skiba-format-editor__primary { background: #0b3a70; border-color: #0b3a70; color: #ffd400; }
+.datalake-tables-settings-menu .skiba-format-editor__palette, .datalake-tables-settings-menu .skiba-format-editor__rule-builder, .datalake-tables-settings-menu .skiba-format-editor__active-rules, .datalake-tables-settings-menu .skiba-format-editor__overrides { display: block; width: 100%; margin: 10px 0; padding: 10px; box-sizing: border-box; border: 1px solid rgba(18,78,155,.13); border-radius: 10px; background: #f7fbfd; }
+.datalake-tables-settings-menu .skiba-format-editor button, .datalake-tables-settings-menu .datalake-settings-secondary { min-height: 30px; border: 1px solid #9bbbd2; border-radius: 7px; background: #ffffff; color: #124e9b; cursor: pointer; font-size: 11px; font-weight: 700; }
+.datalake-tables-settings-menu .skiba-format-editor button:hover, .datalake-tables-settings-menu .datalake-settings-secondary:hover { background: #e7f5fb; border-color: #3089bb; }
+.datalake-tables-settings-menu .skiba-format-editor__palette-button[aria-pressed="true"], .datalake-tables-settings-menu .skiba-format-editor__primary { background: #124e9b; border-color: #124e9b; color: #faf623; }
 .datalake-tables-settings-menu input, .datalake-tables-settings-menu select { box-sizing: border-box; min-height: 30px; max-width: 100%; border: 1px solid #9bbbd2; border-radius: 7px; background: #ffffff; color: #102a43; }
 .datalake-tables-settings-menu .datalake-layout-control { grid-template-columns: minmax(80px,1fr) minmax(90px,1.5fr) 32px; }
 /* Data Lake Tables persistent settings surface */
@@ -927,10 +934,10 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    border: 2px solid var(--dlt-navy, #0b3a70);
+    border: 2px solid var(--dlt-navy, #124e9b);
     border-radius: 16px;
     background: linear-gradient(145deg, #ffffff 0%, #f5f9fc 62%, #e8f4fa 100%);
-    box-shadow: 0 22px 54px rgba(11,58,112,.30);
+    box-shadow: 0 22px 54px rgba(18,78,155,.30);
 }
 .datalake-tables-settings-menu .skiba-toolbar__section,
 .datalake-tables-settings-menu .datalake-layout-section,
@@ -942,13 +949,13 @@
 .datalake-tables-settings-menu .skiba-toolbar__section {
     margin-bottom: 14px;
     padding: 14px;
-    border: 1px solid rgba(11,58,112,.15);
+    border: 1px solid rgba(18,78,155,.15);
     border-radius: 12px;
     background: rgba(255,255,255,.94);
 }
 .datalake-tables-settings-menu .skiba-toolbar__section-title,
 .datalake-tables-settings-menu .skiba-format-editor__label {
-    color: var(--dlt-navy, #0b3a70);
+    color: var(--dlt-navy, #124e9b);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: .08em;
@@ -959,13 +966,13 @@
     max-height: none;
     overflow: visible;
     padding: 14px;
-    border: 1px solid rgba(11,58,112,.18);
+    border: 1px solid rgba(18,78,155,.18);
     border-radius: 14px;
     background: linear-gradient(145deg, #ffffff, #eef8fc);
     box-shadow: none;
 }
 .datalake-tables-settings-menu .skiba-format-editor__heading { margin-bottom: 16px; }
-.datalake-tables-settings-menu .skiba-format-editor__heading strong { color: var(--dlt-navy, #0b3a70); font-size: 15px; }
+.datalake-tables-settings-menu .skiba-format-editor__heading strong { color: var(--dlt-navy, #124e9b); font-size: 15px; }
 .datalake-tables-settings-menu .skiba-format-editor__heading span { color: #35536d; font-size: 12px; }
 .datalake-tables-settings-menu .skiba-format-editor__palette-row,
 .datalake-tables-settings-menu .skiba-format-editor__actions { gap: 8px; margin: 12px 0; }
@@ -993,9 +1000,9 @@
 .datalake-tables-settings-menu .skiba-format-editor__palette-row { align-items: stretch; }
 .datalake-tables-settings-menu .skiba-format-editor__palette-button { flex: 1 1 130px; min-width: 118px; min-height: 38px; white-space: normal; line-height: 1.2; }
 .datalake-tables-settings-menu .datalake-layout-control input[type="range"] { height: 20px; cursor: ew-resize; }
-.datalake-tables-settings-menu .datalake-layout-control output { min-width: 32px; padding: 3px 5px; border-radius: 5px; background: #e8f4fa; color: #0b3a70; }
+.datalake-tables-settings-menu .datalake-layout-control output { min-width: 32px; padding: 3px 5px; border-radius: 5px; background: #e8f4fa; color: #124e9b; }
 .datalake-tables-settings-menu .skiba-toolbar__button { display: block; width: 100%; min-height: 34px; margin: 5px 0; padding: 8px 10px; text-align: left; cursor: pointer; }
-.datalake-tables-settings-menu .skiba-toolbar__button:hover, .datalake-tables-settings-menu .skiba-toolbar__button:focus-visible { border-color: #1f5fae; background: #e6f5fb; outline: 2px solid rgba(31,95,174,.22); outline-offset: 1px; }
+.datalake-tables-settings-menu .skiba-toolbar__button:hover, .datalake-tables-settings-menu .skiba-toolbar__button:focus-visible { border-color: #3089bb; background: #e6f5fb; outline: 2px solid rgba(31,95,174,.22); outline-offset: 1px; }
 /* Data Lake Tables: data palette gradient previews, custom palette input, and the
    one-click visual theme gallery (header/cell/accent bundles, independent of the
    data palette above). Every user gets the same flat gallery -- no author/viewer
@@ -1011,7 +1018,7 @@
 .skiba-format-editor__theme-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; width: 100%; margin: 6px 0; }
 .skiba-format-editor__theme-card-wrap { position: relative; }
 .skiba-format-editor__theme-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; padding: 8px; border: 1px solid rgba(52,71,0,.2); border-radius: 10px; background: #fff; color: #344700; cursor: pointer; font-size: 11px; font-weight: 700; text-align: left; }
-.skiba-format-editor__theme-card[aria-pressed="true"] { border-color: var(--dlt-navy, #0b3a70); box-shadow: 0 0 0 2px rgba(11,58,112,.35); }
+.skiba-format-editor__theme-card[aria-pressed="true"] { border-color: var(--dlt-navy, #124e9b); box-shadow: 0 0 0 2px rgba(18,78,155,.35); }
 .skiba-format-editor__theme-card-preview { display: block; width: 100%; height: 26px; border-radius: 6px; }
 .skiba-format-editor__theme-card-wrap .skiba-format-editor__icon-button { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,.85); border-radius: 50%; }
 .skiba-format-editor__save-theme-row { width: 100%; margin-top: 6px; }
