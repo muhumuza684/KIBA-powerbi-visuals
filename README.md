@@ -46,3 +46,9 @@ Output lands in `dist/`.
 ## Data Lake Tables identity standardization
 
 The product-facing name is **Data Lake Tables**. The stable Power BI `name`, `guid`, and `visualClassName` fields remain unchanged deliberately so existing reports and saved visual instances remain compatible. Internal `skiba-*` CSS selectors are also retained because they are implementation selectors and include protected narrow-layout behavior; they are not user-facing branding.
+
+Brand identity is navy `#124E9B` + yellow `#FAF623` (full palette and CSS variables documented in `AI_HANDOFF.md`).
+
+## For AI coding tools
+
+Read **`AI_HANDOFF.md`** and review current source before making changes — several sessions and parallel AI tools have worked on this repo, and colors/palettes have drifted before. It documents the single source of truth for brand identity and the current known state.
