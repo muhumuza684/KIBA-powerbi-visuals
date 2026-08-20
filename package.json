@@ -16,7 +16,8 @@
 
     "lint": "eslint . --ext .ts",
 
-    "test": "jest"
+    "test": "jest",
+    "test:ci": "jest --runInBand --ci"
 
   },
 
