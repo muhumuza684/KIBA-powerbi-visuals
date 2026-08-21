@@ -52,3 +52,7 @@ Brand identity is navy `#124E9B` + yellow `#FAF623` (full palette and CSS variab
 ## For AI coding tools
 
 Read **`AI_HANDOFF.md`** and review current source before making changes — several sessions and parallel AI tools have worked on this repo, and colors/palettes have drifted before. It documents the single source of truth for brand identity and the current known state.
+
+## Data Lake production usage
+
+See docs/PRODUCT_USAGE_GUIDE.md and the reference CSV under sample-data.

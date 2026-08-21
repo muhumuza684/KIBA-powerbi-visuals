@@ -1,64 +1,29 @@
 name: Build Power BI visual
-
 on:
   push:
-    branches: [main]
-  workflow_dispatch: {}
-
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 permissions:
-  contents: write
-
+  contents: read
 jobs:
   build:
-    runs-on: windows-latest
-
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type-check
-        run: npx tsc --noEmit -p .
-
-      # E2 (T3): automated regression suite for the highest-risk logic (color resolution,
-      # setData()/segment handling). Runs before packaging so a regression blocks the build
-      # the same way a type-check failure does, rather than only surfacing after a .pbiviz
-      # has already been produced and released.
-      - name: Run unit tests
-        run: npm run test:ci
-
-      - name: Package the visual
-        run: npx pbiviz package
-
-      - name: Find the built .pbiviz file
-        id: find_pbiviz
-        shell: bash
-        run: |
-          FILE=$(ls dist/*.pbiviz | head -n 1)
-          echo "path=$FILE" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$FILE")" >> "$GITHUB_OUTPUT"
-
-      - name: Upload as build artifact
-        uses: actions/upload-artifact@v4
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:ci
+      - run: npm run lint
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
         with:
-          name: data-lake-tables-pbiviz
+          name: powerbi-visual
           path: dist/*.pbiviz
-          retention-days: 30
-
-      - name: Publish/update "latest" release with the .pbiviz attached
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: Latest Data Lake Tables build
-          body: Auto-built Data Lake Tables package from the latest push to main. Not a stable/versioned release — just the newest working .pbiviz.
-          files: dist/*.pbiviz
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: error
